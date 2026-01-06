@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Reservation {
+  id                  String   @id @default(uuid())
+  reservationNumber   String   @unique @db.VarChar(20)
+  userId              String   @map("user_id")
+  restaurantId        String   @map("restaurant_id")
+  tableId             String?  @map("table_id")
+  
+  partySize           Int      @map("party_size")
+  reservationDate     DateTime @map("reservation_date") @db.Date
+  reservationTime     DateTime @map("reservation_time") @db.Time
+  durationMinutes     Int      @default(90) @map("duration_minutes")
+  
+  status              ReservationStatus @default(PENDING)
+  statusUpdatedAt     DateTime @default(now()) @map("status_updated_at")
+  
+  customerName        String?  @map("customer_name") @db.VarChar(255)
+  customerPhone       String?  @map("customer_phone") @db.VarChar(20)
+  
+  specialRequests     String?  @map("special_requests") @db.Text
+  
+  version             Int      @default(1)
+  
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
+  
+  @@map("reservations")
+  @@index([userId])
+  @@index([restaurantId])
+  @@index([tableId])
+  @@index([status])
+  @@index([reservationDate, reservationTime])
+  @@index([restaurantId, reservationDate, reservationTime])
+  @@unique([tableId, reservationDate, reservationTime], name: "idx_table_timeslot")
+}
+
+model WaitlistEntry {
+  id                String        @id @default(uuid())
+  restaurantId      String        @map("restaurant_id")
+  userId            String        @map("user_id")
+  partySize         Int           @map("party_size")
+  phoneNumber       String        @map("phone_number") @db.VarChar(20)
+  name              String        @db.VarChar(255)
+  
+  status            WaitlistStatus @default(WAITING)
+  position          Int
+  estimatedWaitTime Int?           @map("estimated_wait_time")
+  
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @default(now()) @updatedAt @map("updated_at")
+  
+  @@map("waitlist_entries")
+  @@index([restaurantId, status])
+  @@index([restaurantId, position])
+  @@index([createdAt])
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  SEATED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED
+  SEATED
+  CANCELLED
+}
+
