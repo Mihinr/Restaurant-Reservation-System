@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.9.1",
-    "@restaurant-reservation/shared": "workspace:*",
+    "@restaurant-reservation/shared": "*",
     "express": "^4.18.2",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",

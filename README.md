@@ -18,13 +18,13 @@ The system consists of three microservices and a frontend application:
 - **Database:** MySQL with Prisma ORM
 - **State Management:** Redux Toolkit
 - **Testing:** Jest with ts-jest
-- **Package Manager:** pnpm (monorepo)
+- **Package Manager:** npm (monorepo with workspaces)
 
 ## Prerequisites
 
 - Node.js 18+
 - MySQL 8.0
-- pnpm 8+
+- npm 9+
 
 ## Local Development Setup
 
@@ -38,7 +38,7 @@ cd Restaurant-Reservation-System
 ### 2. Install Dependencies
 
 ```bash
-pnpm install
+npm install
 ```
 
 ### 3. Database Setup
@@ -86,17 +86,17 @@ LOG_LEVEL="info"
 ### 5. Run Migrations
 
 ```bash
-cd packages/user-service && pnpm db:migrate
-cd ../reservation-service && pnpm db:migrate
-cd ../table-service && pnpm db:migrate
+cd packages/user-service && npm run db:migrate
+cd ../reservation-service && npm run db:migrate
+cd ../table-service && npm run db:migrate
 ```
 
 ### 6. Seed Database
 
 ```bash
-cd packages/user-service && pnpm db:seed
-cd ../reservation-service && pnpm db:seed
-cd ../table-service && pnpm db:seed
+cd packages/user-service && npm run db:seed
+cd ../reservation-service && npm run db:seed
+cd ../table-service && npm run db:seed
 ```
 
 ### 7. Start Services
@@ -104,15 +104,15 @@ cd ../table-service && pnpm db:seed
 From the root directory:
 
 ```bash
-pnpm dev
+npm run dev
 ```
 
 Or start each service individually:
 
 ```bash
-cd packages/user-service && pnpm dev
-cd packages/reservation-service && pnpm dev
-cd packages/table-service && pnpm dev
+cd packages/user-service && npm run dev
+cd packages/reservation-service && npm run dev
+cd packages/table-service && npm run dev
 ```
 
 ## API Endpoints
@@ -151,13 +151,13 @@ cd packages/table-service && pnpm dev
 Run tests for all services:
 
 ```bash
-pnpm test
+npm test
 ```
 
 Run tests with coverage:
 
 ```bash
-pnpm test:coverage
+npm run test:coverage
 ```
 
 ## Project Structure
