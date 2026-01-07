@@ -1,7 +1,18 @@
 import { z } from 'zod';
 import dotenv from 'dotenv';
+import path from 'path';
+import { existsSync } from 'fs';
 
-dotenv.config();
+// Find the .env file in the package directory
+// __dirname will be packages/user-service/src/config (or dist/config)
+const packageEnvPath = path.resolve(__dirname, '../../.env');
+
+if (!existsSync(packageEnvPath)) {
+  throw new Error(`Could not find .env file at: ${packageEnvPath}`);
+}
+
+// Use override: true to ensure package-specific .env values override any existing env vars
+dotenv.config({ path: packageEnvPath, override: true });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -24,4 +35,3 @@ export function getEnvConfig(): EnvConfig {
   }
   return envConfig;
 }
-

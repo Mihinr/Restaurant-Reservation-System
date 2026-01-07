@@ -1,23 +1,28 @@
 import { Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { AuthRequest } from '../middlewares/auth.middleware';
-import { registerSchema, loginSchema, refreshTokenSchema } from '../validators/auth.validator';
+import { logger } from '../config/logger';
 
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   async register(req: AuthRequest, res: Response): Promise<void> {
-    const data = registerSchema.parse(req.body);
-    const result = await this.authService.register(data);
-    res.status(201).json({
-      success: true,
-      data: result,
-    });
+    try {
+      // Validation already done by middleware, so req.body is safe to use
+      const result = await this.authService.register(req.body);
+      res.status(201).json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      logger.error('Registration error:', error);
+      throw error; // Let error handler middleware handle it
+    }
   }
 
   async login(req: AuthRequest, res: Response): Promise<void> {
-    const credentials = loginSchema.parse(req.body);
-    const result = await this.authService.login(credentials);
+    // Validation already done by middleware, so req.body is safe to use
+    const result = await this.authService.login(req.body);
     res.json({
       success: true,
       data: result,
@@ -25,7 +30,8 @@ export class AuthController {
   }
 
   async refresh(req: AuthRequest, res: Response): Promise<void> {
-    const { refreshToken } = refreshTokenSchema.parse(req.body);
+    // Validation already done by middleware, so req.body is safe to use
+    const { refreshToken } = req.body;
     const result = await this.authService.refreshToken(refreshToken);
     res.json({
       success: true,

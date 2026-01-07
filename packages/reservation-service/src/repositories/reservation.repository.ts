@@ -2,7 +2,14 @@ import { PrismaClient, Reservation, ReservationStatus } from '@prisma/client';
 import { CreateReservationDto, UpdateReservationDto } from '@restaurant-reservation/shared';
 
 export class ReservationRepository {
-  constructor(private prisma: PrismaClient) {}
+  private prisma: PrismaClient;
+
+  constructor(prisma: PrismaClient) {
+    if (!prisma) {
+      throw new Error('PrismaClient instance is required');
+    }
+    this.prisma = prisma;
+  }
 
   async create(data: CreateReservationDto & { userId: string; reservationNumber: string }): Promise<Reservation> {
     const reservationDate = new Date(data.reservationDate);

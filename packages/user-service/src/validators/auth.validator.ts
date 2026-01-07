@@ -5,7 +5,14 @@ export const registerSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters').max(100),
   firstName: z.string().min(1, 'First name is required').max(100),
   lastName: z.string().min(1, 'Last name is required').max(100),
-  phone: z.string().regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number').optional(),
+  phone: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || val.trim() === '' || /^\+?[1-9]\d{1,14}$/.test(val),
+      'Invalid phone number format'
+    )
+    .transform((val) => (val && val.trim() !== '' ? val : undefined)),
   role: z.enum(['CUSTOMER', 'STAFF', 'ADMIN']).optional(),
 });
 

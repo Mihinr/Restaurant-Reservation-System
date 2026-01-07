@@ -33,7 +33,7 @@ export class RestaurantService {
     isActive?: boolean;
   }): Promise<RestaurantType[]> {
     const restaurants = await this.restaurantRepository.findAll(filters);
-    return restaurants.map(this.mapToRestaurantType);
+    return restaurants.map((restaurant) => this.mapToRestaurantType(restaurant));
   }
 
   async updateRestaurant(id: string, data: UpdateRestaurantDto): Promise<RestaurantType> {

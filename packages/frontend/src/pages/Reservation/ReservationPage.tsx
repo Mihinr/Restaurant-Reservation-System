@@ -16,19 +16,39 @@ export function ReservationPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">My Reservations</h1>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6">
+      <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">My Reservations</h1>
       {reservations.length === 0 ? (
-        <p className="text-gray-600">You have no reservations yet.</p>
+        <p className="text-gray-600 text-sm sm:text-base">You have no reservations yet.</p>
       ) : (
         <div className="space-y-4">
           {reservations.map((reservation) => (
-            <div key={reservation.id} className="bg-white p-6 rounded-lg shadow-md">
-              <h3 className="font-bold text-lg">{reservation.reservationNumber}</h3>
-              <p>Date: {format(new Date(reservation.reservationDate), 'MMM dd, yyyy')}</p>
-              <p>Time: {format(new Date(reservation.reservationTime), 'HH:mm')}</p>
-              <p>Party Size: {reservation.partySize}</p>
-              <p>Status: {reservation.status}</p>
+            <div key={reservation.id} className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+              <h3 className="font-bold text-base sm:text-lg mb-3 sm:mb-4">
+                {reservation.reservationNumber}
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-sm sm:text-base">
+                <div>
+                  <span className="text-gray-600 font-medium">Date:</span>{' '}
+                  <span className="text-gray-900">
+                    {format(new Date(reservation.reservationDate), 'MMM dd, yyyy')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600 font-medium">Time:</span>{' '}
+                  <span className="text-gray-900">
+                    {format(new Date(reservation.reservationTime), 'HH:mm')}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-600 font-medium">Party Size:</span>{' '}
+                  <span className="text-gray-900">{reservation.partySize}</span>
+                </div>
+                <div>
+                  <span className="text-gray-600 font-medium">Status:</span>{' '}
+                  <span className="text-gray-900 capitalize">{reservation.status.toLowerCase()}</span>
+                </div>
+              </div>
             </div>
           ))}
         </div>

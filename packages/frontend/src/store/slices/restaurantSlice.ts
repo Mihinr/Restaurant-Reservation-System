@@ -37,10 +37,8 @@ export const searchAvailability = createAsyncThunk(
   'restaurant/searchAvailability',
   async (criteria: SearchCriteria & { restaurantId: string }, { rejectWithValue }) => {
     try {
-      const response = await restaurantService.searchAvailability(
-        criteria.restaurantId,
-        criteria
-      );
+      const { restaurantId, ...searchParams } = criteria;
+      const response = await restaurantService.searchAvailability(restaurantId, searchParams);
       return response.data;
     } catch (error: unknown) {
       if (error instanceof Error) {

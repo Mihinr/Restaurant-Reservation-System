@@ -5,6 +5,14 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding table service database...');
 
+  // Helper function to create a Date with just time (using epoch date)
+  const createTime = (timeString: string): Date => {
+    const [hours, minutes, seconds = '00'] = timeString.split(':');
+    const date = new Date('1970-01-01T00:00:00Z');
+    date.setUTCHours(parseInt(hours, 10), parseInt(minutes, 10), parseInt(seconds, 10));
+    return date;
+  };
+
   const restaurants = [
     {
       name: 'The Grand Bistro',
@@ -15,8 +23,8 @@ async function main() {
       phone: '+12125551234',
       email: 'info@grandbistro.com',
       timezone: 'America/New_York',
-      openingTime: '11:00:00',
-      closingTime: '22:00:00',
+      openingTime: createTime('11:00:00'),
+      closingTime: createTime('22:00:00'),
     },
     {
       name: 'Coastal Kitchen',
@@ -27,8 +35,8 @@ async function main() {
       phone: '+13105551234',
       email: 'info@coastalkitchen.com',
       timezone: 'America/Los_Angeles',
-      openingTime: '11:30:00',
-      closingTime: '23:00:00',
+      openingTime: createTime('11:30:00'),
+      closingTime: createTime('23:00:00'),
     },
     {
       name: 'Downtown Diner',
@@ -39,18 +47,16 @@ async function main() {
       phone: '+13125551234',
       email: 'info@downtowndiner.com',
       timezone: 'America/Chicago',
-      openingTime: '10:00:00',
-      closingTime: '21:00:00',
+      openingTime: createTime('10:00:00'),
+      closingTime: createTime('21:00:00'),
     },
   ];
 
   const createdRestaurants = [];
 
   for (const restaurantData of restaurants) {
-    const restaurant = await prisma.restaurant.upsert({
-      where: { id: 'temp-id' },
-      update: {},
-      create: restaurantData,
+    const restaurant = await prisma.restaurant.create({
+      data: restaurantData,
     });
     createdRestaurants.push(restaurant);
   }
@@ -76,11 +82,10 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
+  .catch(e => {
     console.error(e);
     process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();
   });
-

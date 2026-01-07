@@ -2,7 +2,14 @@ import { PrismaClient, Table, TableStatus } from '@prisma/client';
 import { CreateTableDto, UpdateTableDto } from '@restaurant-reservation/shared';
 
 export class TableRepository {
-  constructor(private prisma: PrismaClient) {}
+  private prisma: PrismaClient;
+
+  constructor(prisma: PrismaClient) {
+    if (!prisma) {
+      throw new Error('PrismaClient instance is required');
+    }
+    this.prisma = prisma;
+  }
 
   async create(data: CreateTableDto): Promise<Table> {
     return this.prisma.table.create({

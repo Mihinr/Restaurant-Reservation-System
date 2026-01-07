@@ -20,8 +20,8 @@ model Restaurant {
   email         String?  @db.VarChar(255)
   
   timezone      String   @default("America/New_York") @db.VarChar(50)
-  openingTime   Time     @default("11:00:00") @map("opening_time")
-  closingTime   Time     @default("22:00:00") @map("closing_time")
+  openingTime   DateTime @map("opening_time") @db.Time
+  closingTime   DateTime @map("closing_time") @db.Time
   
   isActive      Boolean  @default(true) @map("is_active")
   

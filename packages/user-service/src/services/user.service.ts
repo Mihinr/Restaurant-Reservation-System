@@ -18,8 +18,9 @@ export class UserService {
     }
 
     const passwordHash = await hashPassword(data.password);
+    const { password, ...userData } = data;
     const user = await this.userRepository.create({
-      ...data,
+      ...userData,
       passwordHash,
     });
 

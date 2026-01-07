@@ -2,7 +2,14 @@ import { PrismaClient, User, Role } from '@prisma/client';
 import { CreateUserDto, UpdateUserDto } from '@restaurant-reservation/shared';
 
 export class UserRepository {
-  constructor(private prisma: PrismaClient) {}
+  private prisma: PrismaClient;
+
+  constructor(prisma: PrismaClient) {
+    if (!prisma) {
+      throw new Error('PrismaClient instance is required');
+    }
+    this.prisma = prisma;
+  }
 
   async create(data: CreateUserDto & { passwordHash: string }): Promise<User> {
     return this.prisma.user.create({
@@ -10,9 +17,9 @@ export class UserRepository {
         email: data.email,
         firstName: data.firstName,
         lastName: data.lastName,
-        phone: data.phone,
+        phone: data.phone || null,
         passwordHash: data.passwordHash,
-        role: data.role || 'CUSTOMER',
+        role: (data.role || 'CUSTOMER') as Role,
       },
     });
   }

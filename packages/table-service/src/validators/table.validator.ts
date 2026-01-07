@@ -17,8 +17,8 @@ export const updateTableSchema = z.object({
 export const availabilitySearchSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
   time: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format (HH:MM)'),
-  partySize: z.number().int().positive('Party size must be a positive integer'),
-  duration: z.number().int().positive().default(90),
+  partySize: z.coerce.number().int().positive('Party size must be a positive integer'),
+  duration: z.coerce.number().int().positive().default(90),
 });
 
 export type CreateTableInput = z.infer<typeof createTableSchema>;

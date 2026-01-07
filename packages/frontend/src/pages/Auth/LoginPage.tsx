@@ -21,9 +21,9 @@ export function LoginPage() {
   };
 
   return (
-    <div className="max-w-md mx-auto">
-      <h1 className="text-2xl font-bold mb-6">Login</h1>
-      <form onSubmit={handleSubmit}>
+    <div className="max-w-md mx-auto px-4 sm:px-6">
+      <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Login</h1>
+      <form onSubmit={handleSubmit} className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
         <Input
           type="email"
           label="Email"
@@ -38,7 +38,7 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        {error && <p className="text-red-500 mb-4">{error}</p>}
+        {error && <p className="text-red-500 mb-4 text-sm sm:text-base">{error}</p>}
         <Button type="submit" isLoading={isLoading} className="w-full">
           Login
         </Button>

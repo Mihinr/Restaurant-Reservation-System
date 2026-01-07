@@ -18,9 +18,11 @@ export function errorHandler(
   }
 
   if (err instanceof ZodError) {
+    const errorMessages = err.errors.map((e) => `${e.path.join('.')}: ${e.message}`);
     res.status(400).json({
       success: false,
       error: 'Validation error',
+      message: errorMessages.join('; '),
       details: err.errors,
     });
     return;

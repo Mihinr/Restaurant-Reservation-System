@@ -9,7 +9,8 @@ export function validate(schema: ZodSchema) {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        next(new BadRequestError(error.errors[0]?.message || 'Validation failed'));
+        const errorMessages = error.errors.map((err) => `${err.path.join('.')}: ${err.message}`);
+        next(new BadRequestError(errorMessages.join('; ') || 'Validation failed'));
       } else {
         next(error);
       }

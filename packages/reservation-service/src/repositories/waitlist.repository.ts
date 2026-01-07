@@ -2,7 +2,14 @@ import { PrismaClient, WaitlistEntry, WaitlistStatus } from '@prisma/client';
 import { CreateWaitlistEntryDto } from '@restaurant-reservation/shared';
 
 export class WaitlistRepository {
-  constructor(private prisma: PrismaClient) {}
+  private prisma: PrismaClient;
+
+  constructor(prisma: PrismaClient) {
+    if (!prisma) {
+      throw new Error('PrismaClient instance is required');
+    }
+    this.prisma = prisma;
+  }
 
   async create(data: CreateWaitlistEntryDto & { userId: string; position: number }): Promise<WaitlistEntry> {
     return this.prisma.waitlistEntry.create({
