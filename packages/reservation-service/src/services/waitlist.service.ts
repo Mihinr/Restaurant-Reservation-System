@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../node_modules/.prisma/reservation-service-client';
 import { WaitlistRepository } from '../repositories/waitlist.repository';
 import { CreateWaitlistEntryDto, WaitlistEntry as WaitlistEntryType } from '@restaurant-reservation/shared';
 import { NotFoundError } from '../errors/AppError';

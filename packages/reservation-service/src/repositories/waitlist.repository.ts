@@ -1,4 +1,4 @@
-import { PrismaClient, WaitlistEntry, WaitlistStatus } from '@prisma/client';
+import { PrismaClient, WaitlistEntry, WaitlistStatus } from '../../node_modules/.prisma/reservation-service-client';
 import { CreateWaitlistEntryDto } from '@restaurant-reservation/shared';
 
 export class WaitlistRepository {

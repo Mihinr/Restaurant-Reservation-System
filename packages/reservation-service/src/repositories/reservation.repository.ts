@@ -1,4 +1,4 @@
-import { PrismaClient, Reservation, ReservationStatus } from '@prisma/client';
+import { PrismaClient, Reservation, ReservationStatus } from '../../node_modules/.prisma/reservation-service-client';
 import { CreateReservationDto, UpdateReservationDto } from '@restaurant-reservation/shared';
 
 export class ReservationRepository {
@@ -151,6 +151,52 @@ export class ReservationRepository {
         statusUpdatedAt: new Date(),
       },
     });
+  }
+
+  async findReservedTableIds(
+    restaurantId: string,
+    date: Date,
+    time: Date,
+    duration: number
+  ): Promise<string[]> {
+    const endTime = new Date(time);
+    endTime.setMinutes(endTime.getMinutes() + duration);
+
+    const reservations = await this.prisma.reservation.findMany({
+      where: {
+        restaurantId,
+        reservationDate: date,
+        status: {
+          in: ['PENDING', 'CONFIRMED', 'SEATED'],
+        },
+        tableId: {
+          not: null,
+        },
+        OR: [
+          {
+            reservationTime: {
+              lte: time,
+            },
+            AND: {
+              reservationTime: {
+                gte: new Date(time.getTime() - duration * 60 * 1000),
+              },
+            },
+          },
+          {
+            reservationTime: {
+              gte: time,
+              lt: endTime,
+            },
+          },
+        ],
+      },
+      select: {
+        tableId: true,
+      },
+    });
+
+    return reservations.map((r) => r.tableId!).filter((id): id is string => id !== null);
   }
 }
 

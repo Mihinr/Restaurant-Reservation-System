@@ -7,13 +7,21 @@ interface AuthState {
   token: string | null;
   isLoading: boolean;
   error: string | null;
+  isInitialized: boolean;
 }
 
+const getStoredAuth = () => {
+  const token = localStorage.getItem('token');
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  return { token, user };
+};
+
 const initialState: AuthState = {
-  user: null,
-  token: localStorage.getItem('token'),
+  ...getStoredAuth(),
   isLoading: false,
   error: null,
+  isInitialized: false,
 };
 
 export const login = createAsyncThunk(
@@ -66,6 +74,24 @@ export const register = createAsyncThunk(
   }
 );
 
+export const restoreAuth = createAsyncThunk(
+  'auth/restoreAuth',
+  async (_, { rejectWithValue }) => {
+    try {
+      const { token } = getStoredAuth();
+      if (!token) {
+        return null;
+      }
+      const response = await authService.getCurrentUser();
+      return { user: response.data, token };
+    } catch (error: unknown) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      return rejectWithValue('Session expired');
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -74,9 +100,11 @@ const authSlice = createSlice({
       state.user = null;
       state.token = null;
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     },
     setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;
+      localStorage.setItem('user', JSON.stringify(action.payload));
     },
   },
   extraReducers: (builder) => {
@@ -90,6 +118,7 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.accessToken;
         localStorage.setItem('token', action.payload.accessToken);
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
@@ -104,10 +133,33 @@ const authSlice = createSlice({
         state.user = action.payload.user;
         state.token = action.payload.accessToken;
         localStorage.setItem('token', action.payload.accessToken);
+        localStorage.setItem('user', JSON.stringify(action.payload.user));
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
+      })
+      .addCase(restoreAuth.pending, (state) => {
+        state.isLoading = true;
+      })
+      .addCase(restoreAuth.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.isInitialized = true;
+        if (action.payload) {
+          state.user = action.payload.user;
+          state.token = action.payload.token;
+          localStorage.setItem('token', action.payload.token);
+          localStorage.setItem('user', JSON.stringify(action.payload.user));
+        } else {
+          state.user = null;
+          state.token = null;
+        }
+      })
+      .addCase(restoreAuth.rejected, (state) => {
+        state.isLoading = false;
+        state.isInitialized = true;
+        state.user = null;
+        state.token = null;
       });
   },
 });

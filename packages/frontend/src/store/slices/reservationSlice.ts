@@ -38,10 +38,67 @@ export const createReservation = createAsyncThunk(
       const response = await reservationService.createReservation(data);
       return response.data;
     } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          'Failed to create reservation';
+        return rejectWithValue(errorMessage);
+      }
       if (error instanceof Error) {
         return rejectWithValue(error.message);
       }
       return rejectWithValue('Failed to create reservation');
+    }
+  }
+);
+
+export const updateReservation = createAsyncThunk(
+  'reservation/updateReservation',
+  async (
+    { id, data }: { id: string; data: Partial<CreateReservationDto> & { version?: number } },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await reservationService.updateReservation(id, data);
+      return response.data;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          'Failed to update reservation';
+        return rejectWithValue(errorMessage);
+      }
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue('Failed to update reservation');
+    }
+  }
+);
+
+export const cancelReservation = createAsyncThunk(
+  'reservation/cancelReservation',
+  async (id: string, { rejectWithValue }) => {
+    try {
+      await reservationService.cancelReservation(id);
+      return id;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          'Failed to cancel reservation';
+        return rejectWithValue(errorMessage);
+      }
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue('Failed to cancel reservation');
     }
   }
 );
@@ -81,6 +138,39 @@ const reservationSlice = createSlice({
         state.currentReservation = action.payload;
       })
       .addCase(createReservation.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(updateReservation.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updateReservation.fulfilled, (state, action) => {
+        state.isLoading = false;
+        const index = state.reservations.findIndex((r) => r.id === action.payload.id);
+        if (index !== -1) {
+          state.reservations[index] = action.payload;
+        }
+        if (state.currentReservation?.id === action.payload.id) {
+          state.currentReservation = action.payload;
+        }
+      })
+      .addCase(updateReservation.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(cancelReservation.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(cancelReservation.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.reservations = state.reservations.filter((r) => r.id !== action.payload);
+        if (state.currentReservation?.id === action.payload) {
+          state.currentReservation = null;
+        }
+      })
+      .addCase(cancelReservation.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       });

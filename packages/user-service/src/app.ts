@@ -1,7 +1,7 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../node_modules/.prisma/user-service-client';
 import { errorHandler } from './middlewares/errorHandler';
 import { createAuthRoutes } from './routes/auth.routes';
 import { createUserRoutes } from './routes/user.routes';

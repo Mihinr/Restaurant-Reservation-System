@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../node_modules/.prisma/table-service-client';
 
 export function createHealthRoutes(prisma: PrismaClient): Router {
   const router = Router();

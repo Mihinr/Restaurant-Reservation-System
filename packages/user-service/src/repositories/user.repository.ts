@@ -1,4 +1,4 @@
-import { PrismaClient, User, Role } from '@prisma/client';
+import { PrismaClient, User, Role } from '../../node_modules/.prisma/user-service-client';
 import { CreateUserDto, UpdateUserDto } from '@restaurant-reservation/shared';
 
 export class UserRepository {

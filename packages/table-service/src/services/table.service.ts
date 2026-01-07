@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../node_modules/.prisma/table-service-client';
 import { TableRepository } from '../repositories/table.repository';
 import {
   CreateTableDto,
@@ -7,6 +7,8 @@ import {
   TableAvailability,
 } from '@restaurant-reservation/shared';
 import { NotFoundError, ConflictError, BadRequestError } from '../errors/AppError';
+import { getEnvConfig } from '../config/env';
+import axios from 'axios';
 
 export class TableService {
   private tableRepository: TableRepository;
@@ -106,6 +108,26 @@ export class TableService {
       throw new NotFoundError('Restaurant not found');
     }
 
+    // Fetch reserved table IDs from reservation service
+    let actualReservedTableIds: string[] = [];
+    try {
+      const { RESERVATION_SERVICE_URL } = getEnvConfig();
+      const response = await axios.get<{ success: boolean; data: string[] }>(
+        `${RESERVATION_SERVICE_URL}/api/v1/reservations/restaurants/${restaurantId}/reserved-tables`,
+        {
+          params: { date, time, duration },
+          timeout: 5000,
+        }
+      );
+      actualReservedTableIds = response.data.data || [];
+    } catch (error) {
+      // If reservation service is unavailable, log and continue with provided reservedTableIds
+      console.warn('Failed to fetch reserved tables from reservation service:', error);
+    }
+
+    // Merge provided reservedTableIds with actual reserved table IDs
+    const allReservedTableIds = [...new Set([...reservedTableIds, ...actualReservedTableIds])];
+
     const tables = await this.tableRepository.findAvailableTables(restaurantId, partySize);
 
     const availableTables: TableAvailability[] = [];
@@ -115,7 +137,7 @@ export class TableService {
         continue;
       }
 
-      const isReserved = reservedTableIds.includes(table.id);
+      const isReserved = allReservedTableIds.includes(table.id);
       const isAvailable = !isReserved && table.status === 'AVAILABLE';
 
       availableTables.push({

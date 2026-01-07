@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { Request } from 'express';
+import { z } from 'zod';
 import { ReservationService } from '../services/reservation.service';
 import { createReservationSchema, updateReservationSchema } from '../validators/reservation.validator';
 
@@ -19,7 +20,8 @@ export class ReservationController {
       return;
     }
 
-    const data = createReservationSchema.parse(req.body);
+    // Validation already done by middleware, but we need to ensure type safety
+    const data = req.body as z.infer<typeof createReservationSchema>;
     const reservation = await this.reservationService.createReservation(req.user.userId, data);
     res.status(201).json({
       success: true,
@@ -54,7 +56,8 @@ export class ReservationController {
 
   async update(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
-    const data = updateReservationSchema.parse(req.body);
+    // Validation already done by middleware, but we need to ensure type safety
+    const data = req.body as z.infer<typeof updateReservationSchema>;
     const reservation = await this.reservationService.updateReservation(id, data, data.version);
     res.json({
       success: true,
@@ -68,6 +71,31 @@ export class ReservationController {
     res.json({
       success: true,
       message: 'Reservation cancelled successfully',
+    });
+  }
+
+  async getReservedTableIds(req: Request, res: Response): Promise<void> {
+    const { restaurantId } = req.params;
+    const { date, time, duration } = req.query;
+
+    if (!date || !time) {
+      res.status(400).json({
+        success: false,
+        error: 'Date and time are required',
+      });
+      return;
+    }
+
+    const tableIds = await this.reservationService.getReservedTableIds(
+      restaurantId,
+      date as string,
+      time as string,
+      duration ? parseInt(duration as string, 10) : 90
+    );
+
+    res.json({
+      success: true,
+      data: tableIds,
     });
   }
 }

@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../node_modules/.prisma/reservation-service-client';
 import { WaitlistController } from '../controllers/waitlist.controller';
 import { WaitlistService } from '../services/waitlist.service';
 import { validate } from '../middlewares/validate.middleware';
+import { authenticate } from '../middlewares/auth.middleware';
 import { createWaitlistEntrySchema } from '../validators/waitlist.validator';
 
 export function createWaitlistRoutes(prisma: PrismaClient): Router {
@@ -10,7 +11,7 @@ export function createWaitlistRoutes(prisma: PrismaClient): Router {
   const waitlistService = new WaitlistService(prisma);
   const waitlistController = new WaitlistController(waitlistService);
 
-  router.post('/', validate(createWaitlistEntrySchema), (req, res, next) => {
+  router.post('/', authenticate, validate(createWaitlistEntrySchema), (req, res, next) => {
     waitlistController.join(req as any, res).catch(next);
   });
 

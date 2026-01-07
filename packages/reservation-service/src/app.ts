@@ -1,7 +1,7 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../node_modules/.prisma/reservation-service-client';
 import { errorHandler } from './middlewares/errorHandler';
 import { createReservationRoutes } from './routes/reservation.routes';
 import { createWaitlistRoutes } from './routes/waitlist.routes';

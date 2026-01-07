@@ -53,6 +53,9 @@ export function Header() {
                 <Link to="/reservation" className="hover:text-gray-300 transition-colors">
                   My Reservations
                 </Link>
+                <Link to="/waitlist" className="hover:text-gray-300 transition-colors">
+                  Waitlist
+                </Link>
                 <Link to="/profile" className="hover:text-gray-300 transition-colors">
                   Profile
                 </Link>
@@ -97,6 +100,13 @@ export function Header() {
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   My Reservations
+                </Link>
+                <Link
+                  to="/waitlist"
+                  className="block py-2 hover:text-gray-300 transition-colors"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Waitlist
                 </Link>
                 <Link
                   to="/profile"

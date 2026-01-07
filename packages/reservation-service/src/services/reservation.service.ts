@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../node_modules/.prisma/reservation-service-client';
 import { ReservationRepository } from '../repositories/reservation.repository';
 import {
   CreateReservationDto,
@@ -107,6 +107,25 @@ export class ReservationService {
     }
 
     await this.reservationRepository.delete(id);
+  }
+
+  async getReservedTableIds(
+    restaurantId: string,
+    date: string,
+    time: string,
+    duration: number = 90
+  ): Promise<string[]> {
+    const reservationDate = new Date(date);
+    const [hours, minutes] = time.split(':').map(Number);
+    const reservationTime = new Date();
+    reservationTime.setHours(hours, minutes, 0, 0);
+
+    return this.reservationRepository.findReservedTableIds(
+      restaurantId,
+      reservationDate,
+      reservationTime,
+      duration
+    );
   }
 
   private mapToReservationType(reservation: {

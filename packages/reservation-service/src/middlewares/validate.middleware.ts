@@ -5,11 +5,15 @@ import { BadRequestError } from '../errors/AppError';
 export function validate(schema: ZodSchema) {
   return (req: Request, res: Response, next: NextFunction): void => {
     try {
-      schema.parse(req.body);
+      req.body = schema.parse(req.body);
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        next(new BadRequestError(error.errors[0]?.message || 'Validation failed'));
+        const errorMessages = error.errors.map((err) => {
+          const path = err.path.join('.');
+          return path ? `${path}: ${err.message}` : err.message;
+        });
+        next(new BadRequestError(errorMessages.join('; ') || 'Validation failed'));
       } else {
         next(error);
       }

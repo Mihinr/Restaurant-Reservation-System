@@ -18,6 +18,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.string().transform(Number).pipe(z.number().int().positive()),
   DATABASE_URL: z.string().url(),
+  RESERVATION_SERVICE_URL: z.string().url().default('http://localhost:3002'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });
 
