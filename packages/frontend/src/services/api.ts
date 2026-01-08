@@ -30,6 +30,8 @@ api.interceptors.response.use(
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
+    // Network errors (no response) are handled in individual catch blocks
+    // where they can be displayed as toasts
     return Promise.reject(error);
   }
 );

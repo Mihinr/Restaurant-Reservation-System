@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchRestaurants } from '../../store/slices/restaurantSlice';
 import { fetchWaitlistByRestaurant, updateWaitlistStatus, removeFromWaitlist } from '../../store/slices/waitlistSlice';
@@ -30,16 +31,62 @@ export function StaffDashboardPage() {
   const handleUpdateStatus = async (entryId: string, status: WaitlistEntry['status']) => {
     const result = await dispatch(updateWaitlistStatus({ id: entryId, status }));
     if (updateWaitlistStatus.fulfilled.match(result)) {
+      if (status === 'NOTIFIED') {
+        toast.success('Customer notified successfully');
+      } else if (status === 'SEATED') {
+        toast.success('Customer seated successfully');
+      }
       if (selectedRestaurantId) {
         dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
       }
     }
   };
 
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
+
   const handleRemove = async (entryId: string) => {
-    if (window.confirm('Are you sure you want to remove this entry from the waitlist?')) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      toast(
+        (t) => (
+          <div className="flex flex-col gap-3">
+            <p className="font-semibold">Are you sure you want to remove this entry from the waitlist?</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  resolve(false);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-sm font-medium"
+              >
+                No
+              </button>
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  resolve(true);
+                }}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-medium"
+              >
+                Yes, Remove
+              </button>
+            </div>
+          </div>
+        ),
+        {
+          duration: Infinity,
+          id: 'confirm-remove',
+        }
+      );
+    });
+
+    if (confirmed) {
       const result = await dispatch(removeFromWaitlist(entryId));
       if (removeFromWaitlist.fulfilled.match(result)) {
+        toast.success('Removed from waitlist successfully');
         if (selectedRestaurantId) {
           dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
         }
@@ -106,8 +153,6 @@ export function StaffDashboardPage() {
             <h2 className="text-lg sm:text-xl font-bold mb-4">Waitlist Management</h2>
             {isLoading ? (
               <div className="text-center py-8">Loading waitlist...</div>
-            ) : error ? (
-              <div className="text-red-500 text-sm sm:text-base">{error}</div>
             ) : waitingEntries.length === 0 ? (
               <p className="text-gray-600 text-sm sm:text-base">No one waiting in the queue.</p>
             ) : (

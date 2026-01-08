@@ -1,5 +1,6 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchRestaurants, searchAvailability } from '../../store/slices/restaurantSlice';
 import { createReservation } from '../../store/slices/reservationSlice';
@@ -54,11 +55,23 @@ export function SearchPage() {
     e.preventDefault();
     if (dateError) return;
     if (searchCriteria.restaurantId) {
-      dispatch(searchAvailability({ ...searchCriteria, restaurantId: searchCriteria.restaurantId }));
+      await dispatch(searchAvailability({ ...searchCriteria, restaurantId: searchCriteria.restaurantId }));
       setSelectedTable(null);
       setShowReservationForm(false);
     }
   };
+
+  useEffect(() => {
+    if (availableTables.length > 0) {
+      const hasAvailable = availableTables.some(t => t.available);
+      if (!hasAvailable) {
+        toast('No tables available for the selected date and time', {
+          icon: 'ℹ️',
+          duration: 4000,
+        });
+      }
+    }
+  }, [availableTables]);
 
   const uniqueCities = Array.from(new Set(restaurants.map((r) => r.city))).sort();
   const uniqueStates = Array.from(new Set(restaurants.map((r) => r.state))).sort();
@@ -86,9 +99,16 @@ export function SearchPage() {
     );
 
     if (createReservation.fulfilled.match(result)) {
+      toast.success('Reservation created successfully');
       navigate('/reservation');
     }
   };
+
+  useEffect(() => {
+    if (reservationError) {
+      toast.error(reservationError);
+    }
+  }, [reservationError]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -266,7 +286,6 @@ export function SearchPage() {
                 }
               />
             </div>
-            {reservationError && <p className="text-red-500 mb-4 text-sm">{reservationError}</p>}
             <div className="flex gap-3">
               <Button type="submit" isLoading={isCreatingReservation} className="flex-1">
                 Confirm Reservation

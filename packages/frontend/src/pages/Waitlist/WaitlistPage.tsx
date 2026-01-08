@@ -1,4 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchRestaurants } from '../../store/slices/restaurantSlice';
 import { joinWaitlist, fetchWaitlistByRestaurant } from '../../store/slices/waitlistSlice';
@@ -54,11 +55,22 @@ export function WaitlistPage() {
     );
 
     if (joinWaitlist.fulfilled.match(result)) {
+      toast.success('Added to waitlist successfully');
+      toast(`Your position in the waitlist: #${result.payload.position}`, {
+        icon: 'ℹ️',
+        duration: 5000,
+      });
       setShowForm(false);
       setWaitlistForm({ partySize: 2, name: '', phoneNumber: '' });
       dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
     }
   };
+
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -112,14 +124,6 @@ export function WaitlistPage() {
               onChange={(e) => setWaitlistForm({ ...waitlistForm, phoneNumber: e.target.value })}
               required
             />
-            {error && <p className="text-red-500 text-sm">{error}</p>}
-            {currentEntry && (
-              <div className="p-3 bg-green-50 border border-green-200 rounded">
-                <p className="text-green-800 text-sm">
-                  You've been added to the waitlist! Position: {currentEntry.position}
-                </p>
-              </div>
-            )}
             <div className="flex gap-3">
               <Button type="submit" isLoading={isLoading} className="flex-1">
                 Join Waitlist

@@ -1,4 +1,5 @@
 import { useState, FormEvent } from 'react';
+import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { authService } from '../../services/authService';
 import { setUser } from '../../store/slices/authSlice';
@@ -10,7 +11,6 @@ export function ProfilePage() {
   const dispatch = useAppDispatch();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -23,7 +23,6 @@ export function ProfilePage() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setError(null);
     setIsLoading(true);
 
     try {
@@ -36,15 +35,16 @@ export function ProfilePage() {
       setIsEditing(false);
       // Update localStorage
       localStorage.setItem('user', JSON.stringify(response.data));
+      toast.success('Profile updated successfully');
     } catch (err: unknown) {
+      let errorMessage = 'Failed to update profile';
       if (err && typeof err === 'object' && 'response' in err) {
         const axiosError = err as { response?: { data?: { error?: string; message?: string } } };
-        setError(axiosError.response?.data?.message || axiosError.response?.data?.error || 'Failed to update profile');
+        errorMessage = axiosError.response?.data?.message || axiosError.response?.data?.error || errorMessage;
       } else if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Failed to update profile');
+        errorMessage = err.message;
       }
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -56,7 +56,6 @@ export function ProfilePage() {
       lastName: user.lastName,
       phone: user.phone || '',
     });
-    setError(null);
     setIsEditing(false);
   };
 
@@ -103,7 +102,6 @@ export function ProfilePage() {
               <span className="text-gray-900 capitalize">{user.role.toLowerCase()}</span>
             </p>
           </div>
-          {error && <p className="text-red-500 text-sm sm:text-base">{error}</p>}
           <div className="flex gap-3">
             <Button type="submit" isLoading={isLoading} className="flex-1">
               Save Changes

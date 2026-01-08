@@ -1,4 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react';
+import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchReservations, updateReservation, cancelReservation } from '../../store/slices/reservationSlice';
 import { Input } from '../../components/common/Input';
@@ -23,6 +24,19 @@ export function ReservationPage() {
     dispatch(fetchReservations());
   }, [dispatch]);
 
+  useEffect(() => {
+    if (error) {
+      if (error.includes('rate limit') || error.includes('Too many requests')) {
+        toast.error(error, {
+          duration: 5000,
+          icon: '⚠️',
+        });
+      } else {
+        toast.error(error);
+      }
+    }
+  }, [error]);
+
   const handleEdit = (reservation: Reservation) => {
     setEditingReservation(reservation);
     setEditForm({
@@ -39,7 +53,7 @@ export function ReservationPage() {
     e.preventDefault();
     if (!editingReservation) return;
 
-    await dispatch(
+    const result = await dispatch(
       updateReservation({
         id: editingReservation.id,
         data: {
@@ -54,14 +68,54 @@ export function ReservationPage() {
       })
     );
 
-    setEditingReservation(null);
-    dispatch(fetchReservations());
+    if (updateReservation.fulfilled.match(result)) {
+      toast.success('Reservation updated successfully');
+      setEditingReservation(null);
+      dispatch(fetchReservations());
+    }
   };
 
   const handleCancel = async (id: string) => {
-    if (window.confirm('Are you sure you want to cancel this reservation?')) {
-      await dispatch(cancelReservation(id));
-      dispatch(fetchReservations());
+    const confirmed = await new Promise<boolean>((resolve) => {
+      toast(
+        (t) => (
+          <div className="flex flex-col gap-3">
+            <p className="font-semibold">Are you sure you want to cancel this reservation?</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  resolve(false);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-sm font-medium"
+              >
+                No
+              </button>
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  resolve(true);
+                }}
+                className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-medium"
+              >
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        ),
+        {
+          duration: Infinity,
+          id: 'confirm-cancel',
+        }
+      );
+    });
+    
+    if (confirmed) {
+      const result = await dispatch(cancelReservation(id));
+      if (cancelReservation.fulfilled.match(result)) {
+        toast.success('Reservation cancelled successfully');
+        dispatch(fetchReservations());
+      }
     }
   };
 
@@ -72,25 +126,6 @@ export function ReservationPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6">
       <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">My Reservations</h1>
-      {error && (
-        <div
-          className={`mb-4 p-3 rounded-md text-sm ${
-            error.includes('rate limit') || error.includes('Too many requests')
-              ? 'bg-yellow-50 border border-yellow-200 text-yellow-800'
-              : 'bg-red-50 border border-red-200 text-red-800'
-          }`}
-        >
-          <p className="font-medium">
-            {error.includes('rate limit') || error.includes('Too many requests') ? '⚠️ ' : '❌ '}
-            {error}
-          </p>
-          {(error.includes('rate limit') || error.includes('Too many requests')) && (
-            <p className="mt-2 text-xs">
-              Some reservation details may be incomplete. Please refresh in a moment.
-            </p>
-          )}
-        </div>
-      )}
       {reservations.length === 0 ? (
         <p className="text-gray-600 text-sm sm:text-base">You have no reservations yet.</p>
       ) : (

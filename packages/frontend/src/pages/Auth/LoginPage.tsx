@@ -1,5 +1,6 @@
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { login } from '../../store/slices/authSlice';
 import { Input } from '../../components/common/Input';
@@ -12,10 +13,17 @@ export function LoginPage() {
   const { isLoading, error } = useAppSelector((state) => state.auth);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (error) {
+      toast.error(error);
+    }
+  }, [error]);
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const result = await dispatch(login({ email, password }));
     if (login.fulfilled.match(result)) {
+      toast.success('Login successful!');
       // Redirect staff/admin to staff dashboard, customers to home
       if (result.payload.user.role === 'STAFF' || result.payload.user.role === 'ADMIN') {
         navigate('/staff');
@@ -43,7 +51,6 @@ export function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        {error && <p className="text-red-500 mb-4 text-sm sm:text-base">{error}</p>}
         <Button type="submit" isLoading={isLoading} className="w-full">
           Login
         </Button>
