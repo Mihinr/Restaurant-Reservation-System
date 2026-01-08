@@ -94,5 +94,14 @@ export class TableController {
       data: tables,
     });
   }
+
+  async getBatch(req: Request, res: Response): Promise<void> {
+    const { ids } = req.body;
+    const tables = await this.tableService.getTablesByIds(ids);
+    res.json({
+      success: true,
+      data: tables,
+    });
+  }
 }
 

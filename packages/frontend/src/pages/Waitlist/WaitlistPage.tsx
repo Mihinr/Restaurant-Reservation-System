@@ -17,6 +17,7 @@ export function WaitlistPage() {
   const dispatch = useAppDispatch();
   const { restaurants } = useAppSelector((state) => state.restaurant);
   const { entries, isLoading, error, currentEntry } = useAppSelector((state) => state.waitlist);
+  const { user } = useAppSelector((state) => state.auth);
 
   useEffect(() => {
     dispatch(fetchRestaurants());
@@ -27,6 +28,17 @@ export function WaitlistPage() {
       dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
     }
   }, [dispatch, selectedRestaurantId]);
+
+  useEffect(() => {
+    // Auto-fill from profile when form is shown
+    if (showForm && user) {
+      setWaitlistForm({
+        partySize: 2,
+        name: `${user.firstName} ${user.lastName}`.trim(),
+        phoneNumber: user.phone || '',
+      });
+    }
+  }, [showForm, user]);
 
   const handleJoinWaitlist = async (e: FormEvent) => {
     e.preventDefault();
@@ -125,32 +137,36 @@ export function WaitlistPage() {
         )}
       </div>
 
-      {selectedRestaurantId && entries.length > 0 && (
+      {selectedRestaurantId && (
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
           <h2 className="text-lg sm:text-xl font-bold mb-4">Current Waitlist</h2>
-          <div className="space-y-3">
-            {entries
-              .filter((entry) => entry.status === 'WAITING')
-              .sort((a, b) => a.position - b.position)
-              .map((entry) => (
-                <div key={entry.id} className="p-3 border border-gray-200 rounded">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-sm sm:text-base">{entry.name}</p>
-                      <p className="text-xs sm:text-sm text-gray-600">
-                        Party of {entry.partySize} • {entry.phoneNumber}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold text-sm sm:text-base">#{entry.position}</p>
-                      {entry.estimatedWaitTime && (
-                        <p className="text-xs text-gray-600">~{entry.estimatedWaitTime} min</p>
-                      )}
+          {entries.length === 0 ? (
+            <p className="text-gray-600 text-sm sm:text-base">No one is currently on the waitlist for this restaurant.</p>
+          ) : (
+            <div className="space-y-3">
+              {entries
+                .filter((entry) => entry.status === 'WAITING')
+                .sort((a, b) => a.position - b.position)
+                .map((entry) => (
+                  <div key={entry.id} className="p-3 border border-gray-200 rounded">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="font-medium text-sm sm:text-base">{entry.name}</p>
+                        <p className="text-xs sm:text-sm text-gray-600">
+                          Party of {entry.partySize} • {entry.phoneNumber}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-sm sm:text-base">#{entry.position}</p>
+                        {entry.estimatedWaitTime && (
+                          <p className="text-xs text-gray-600">~{entry.estimatedWaitTime} min</p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-          </div>
+                ))}
+            </div>
+          )}
         </div>
       )}
     </div>

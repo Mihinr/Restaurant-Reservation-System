@@ -48,6 +48,14 @@ export class TableService {
     return tables.map(this.mapToTableType);
   }
 
+  async getTablesByIds(ids: string[]): Promise<TableType[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const tables = await this.tableRepository.findByIds(ids);
+    return tables.map(this.mapToTableType);
+  }
+
   async updateTable(id: string, data: UpdateTableDto): Promise<TableType> {
     const table = await this.tableRepository.findById(id);
     if (!table) {
@@ -106,6 +114,26 @@ export class TableService {
 
     if (!restaurant) {
       throw new NotFoundError('Restaurant not found');
+    }
+
+    // Validate restaurant hours
+    const [timeHours, timeMinutes] = time.split(':').map(Number);
+    const reservationTime = timeHours * 60 + timeMinutes; // minutes since midnight
+
+    // Extract hours and minutes from opening/closing times
+    const openingTime = new Date(restaurant.openingTime);
+    const closingTime = new Date(restaurant.closingTime);
+    const openingMinutes = openingTime.getUTCHours() * 60 + openingTime.getUTCMinutes();
+    const closingMinutes = closingTime.getUTCHours() * 60 + closingTime.getUTCMinutes();
+
+    // Check if reservation time is within restaurant hours
+    // Also check if reservation + duration would exceed closing time
+    const reservationEndMinutes = reservationTime + duration;
+    
+    if (reservationTime < openingMinutes || reservationEndMinutes > closingMinutes) {
+      throw new BadRequestError(
+        `Reservation time must be between ${String(openingTime.getUTCHours()).padStart(2, '0')}:${String(openingTime.getUTCMinutes()).padStart(2, '0')} and ${String(closingTime.getUTCHours()).padStart(2, '0')}:${String(closingTime.getUTCMinutes()).padStart(2, '0')}. The reservation duration must not exceed closing time.`
+      );
     }
 
     // Fetch reserved table IDs from reservation service

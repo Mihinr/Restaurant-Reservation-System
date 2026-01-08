@@ -38,5 +38,17 @@ export const waitlistService = {
     );
     return { data: response.data.data };
   },
+
+  async updateWaitlistStatus(id: string, status: WaitlistEntry['status']): Promise<{ data: WaitlistEntry }> {
+    const response = await reservationApi.put<{ success: boolean; data: WaitlistEntry }>(
+      `/api/v1/waitlist/${id}/status`,
+      { status }
+    );
+    return { data: response.data.data };
+  },
+
+  async removeFromWaitlist(id: string): Promise<void> {
+    await reservationApi.delete(`/api/v1/waitlist/${id}`);
+  },
 };
 

@@ -16,7 +16,12 @@ export function LoginPage() {
     e.preventDefault();
     const result = await dispatch(login({ email, password }));
     if (login.fulfilled.match(result)) {
-      navigate('/');
+      // Redirect staff/admin to staff dashboard, customers to home
+      if (result.payload.user.role === 'STAFF' || result.payload.user.role === 'ADMIN') {
+        navigate('/staff');
+      } else {
+        navigate('/');
+      }
     }
   };
 

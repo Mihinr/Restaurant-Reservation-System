@@ -7,7 +7,11 @@ export interface Reservation {
   reservationNumber: string;
   userId: string;
   restaurantId: string;
+  restaurantName?: string;
+  restaurantCity?: string;
+  restaurantState?: string;
   tableId?: string;
+  tableNumber?: string;
   partySize: number;
   reservationDate: Date;
   reservationTime: Date;

@@ -55,6 +55,14 @@ export class RestaurantService {
     await this.restaurantRepository.delete(id);
   }
 
+  async getRestaurantsByIds(ids: string[]): Promise<RestaurantType[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const restaurants = await this.restaurantRepository.findByIds(ids);
+    return restaurants.map((restaurant) => this.mapToRestaurantType(restaurant));
+  }
+
   private mapToRestaurantType(restaurant: {
     id: string;
     name: string;

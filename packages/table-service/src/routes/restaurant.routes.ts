@@ -3,7 +3,7 @@ import { PrismaClient } from '../node_modules/.prisma/table-service-client';
 import { RestaurantController } from '../controllers/restaurant.controller';
 import { RestaurantService } from '../services/restaurant.service';
 import { validate } from '../middlewares/validate.middleware';
-import { createRestaurantSchema, updateRestaurantSchema } from '../validators/restaurant.validator';
+import { createRestaurantSchema, updateRestaurantSchema, batchRestaurantSchema } from '../validators/restaurant.validator';
 
 export function createRestaurantRoutes(prisma: PrismaClient): Router {
   const router = Router();
@@ -16,6 +16,10 @@ export function createRestaurantRoutes(prisma: PrismaClient): Router {
 
   router.get('/', (req, res, next) => {
     restaurantController.getAll(req, res).catch(next);
+  });
+
+  router.post('/batch', validate(batchRestaurantSchema), (req, res, next) => {
+    restaurantController.getBatch(req, res).catch(next);
   });
 
   router.get('/:id', (req, res, next) => {

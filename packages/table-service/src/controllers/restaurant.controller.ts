@@ -56,5 +56,14 @@ export class RestaurantController {
       message: 'Restaurant deleted successfully',
     });
   }
+
+  async getBatch(req: Request, res: Response): Promise<void> {
+    const { ids } = req.body;
+    const restaurants = await this.restaurantService.getRestaurantsByIds(ids);
+    res.json({
+      success: true,
+      data: restaurants,
+    });
+  }
 }
 

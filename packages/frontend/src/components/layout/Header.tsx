@@ -50,6 +50,11 @@ export function Header() {
             </Link>
             {token ? (
               <>
+                {(user?.role === 'STAFF' || user?.role === 'ADMIN') && (
+                  <Link to="/staff" className="hover:text-gray-300 transition-colors">
+                    Staff Dashboard
+                  </Link>
+                )}
                 <Link to="/reservation" className="hover:text-gray-300 transition-colors">
                   My Reservations
                 </Link>
@@ -94,6 +99,15 @@ export function Header() {
             </Link>
             {token ? (
               <>
+                {(user?.role === 'STAFF' || user?.role === 'ADMIN') && (
+                  <Link
+                    to="/staff"
+                    className="block py-2 hover:text-gray-300 transition-colors"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Staff Dashboard
+                  </Link>
+                )}
                 <Link
                   to="/reservation"
                   className="block py-2 hover:text-gray-300 transition-colors"

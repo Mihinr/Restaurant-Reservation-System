@@ -29,6 +29,19 @@ export class TableRepository {
     });
   }
 
+  async findByIds(ids: string[]): Promise<Table[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    return this.prisma.table.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+    });
+  }
+
   async findByRestaurant(restaurantId: string): Promise<Table[]> {
     return this.prisma.table.findMany({
       where: { restaurantId },

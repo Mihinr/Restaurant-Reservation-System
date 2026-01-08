@@ -21,7 +21,12 @@ export const availabilitySearchSchema = z.object({
   duration: z.coerce.number().int().positive().default(90),
 });
 
+export const batchTableSchema = z.object({
+  ids: z.array(z.string().uuid('Invalid table ID')).min(1, 'At least one table ID is required').max(100, 'Maximum 100 table IDs allowed'),
+});
+
 export type CreateTableInput = z.infer<typeof createTableSchema>;
 export type UpdateTableInput = z.infer<typeof updateTableSchema>;
 export type AvailabilitySearchInput = z.infer<typeof availabilitySearchSchema>;
+export type BatchTableInput = z.infer<typeof batchTableSchema>;
 

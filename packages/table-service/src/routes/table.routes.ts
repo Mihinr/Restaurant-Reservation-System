@@ -3,7 +3,7 @@ import { PrismaClient } from '../node_modules/.prisma/table-service-client';
 import { TableController } from '../controllers/table.controller';
 import { TableService } from '../services/table.service';
 import { validate } from '../middlewares/validate.middleware';
-import { createTableSchema, updateTableSchema } from '../validators/table.validator';
+import { createTableSchema, updateTableSchema, batchTableSchema } from '../validators/table.validator';
 
 export function createTableRoutes(prisma: PrismaClient): Router {
   const router = Router();
@@ -12,6 +12,10 @@ export function createTableRoutes(prisma: PrismaClient): Router {
 
   router.post('/', validate(createTableSchema), (req, res, next) => {
     tableController.create(req, res).catch(next);
+  });
+
+  router.post('/batch', validate(batchTableSchema), (req, res, next) => {
+    tableController.getBatch(req, res).catch(next);
   });
 
   router.get('/:id', (req, res, next) => {

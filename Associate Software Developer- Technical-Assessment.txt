@@ -1,0 +1,347 @@
+Associate Software Developer - Technical Assessment
+Estimated Time: 5-7 days
+Deadline: January 10, 2026
+
+Introduction
+This assessment evaluates your ability to design, implement, and deploy production-ready software systems. We want to see how you architect solutions, make technical tradeoffs, implement clean code, and document your work for team collaboration.
+You will build a restaurant reservation and table management system using modern software architecture principles. This assessment requires you to demonstrate advanced knowledge of system design, data modeling, API architecture, and deployment practices.
+
+The Business Problem
+A restaurant group operates multiple locations and needs a comprehensive digital system. Currently, they:
+-	Manage reservations across multiple restaurant locations
+-	Track table availability and capacity in real time
+-	Handle walk-in customers and waitlist management
+-	Need staff coordination for seating assignments
+-	Want customer profiles with reservation history
+-	Require reporting on occupancy rates and revenue
+-	Need to handle peak hours with multiple concurrent bookings
+The restaurant group wants a scalable system that can handle high traffic during peak hours and provide reliable service across multiple locations.
+
+Your Task
+Build a restaurant reservation system with a microservices architecture. The system must handle concurrent requests, maintain data consistency, and provide real-time updates across services.
+Core scenarios:
+-	Customers can search available tables by date, time, party size, and location
+-	System must prevent double-booking and handle concurrent reservation attempts
+-	Staff can manage table status and seating assignments in real time
+ 
+-	System must handle reservation modifications and cancellations with appropriate business rules
+
+Part 1: System Design & Architecture
+Create a comprehensive design document that demonstrates architectural thinking.
+1.1	Service Architecture
+-	What services will comprise your system? (minimum 3 services required)
+-	Define clear boundaries and responsibilities for each service
+-	How will services communicate? (synchronous vs asynchronous patterns)
+-	How will you handle service failures and maintain system resilience?
+-	What patterns will you use for data consistency across services?
+-	How will you handle distributed transactions?
+1.2	Database Design
+-	What database technology will each service use? (PostgreSQL or MySQL)
+-	Design complete schemas with all tables, columns, data types, and constraints
+-	Define relationships, foreign keys, and indexing strategy
+-	How will you handle data that needs to exist across services?
+-	What is your strategy for database migrations and versioning?
+-	How will you ensure data consistency in a distributed system?
+1.3	API Architecture
+For each service, document:
+-	Complete API specification (consider OpenAPI/Swagger format)
+-	RESTful resource design and endpoint structure
+-	Request/response schemas with validation rules
+-	Authentication and authorization strategy
+-	Rate limiting and throttling approach
+-	Versioning strategy
+-	Error response standards and status codes
+ 
+1.4	System Integration
+Describe your approach to:
+-	Inter-service communication patterns
+-	Event-driven architecture (if applicable)
+-	Message queues or event buses (if applicable)
+-	Caching strategy for performance
+-	Real-time updates to clients
+-	Handling eventual consistency
+1.5	Data Flow & Business Logic
+Document detailed flows for:
+-	Customer searches for available tables with specific criteria
+-	Creating a reservation with validation and conflict checking
+-	Handling concurrent reservation attempts for the same table
+-	Modifying an existing reservation (time change, party size change)
+-	Cancellation policies and waitlist management
+-	Real-time table status updates for staff
+1.6	Scalability & Performance
+Address:
+-	How will your system handle 1000+ concurrent users?
+-	What bottlenecks might exist and how would you address them?
+-	Caching strategy at different layers
+-	Database query optimization approach
+-	Load balancing considerations
+Deliverable: Comprehensive design document with architectural diagrams, database schemas, API specifications, and sequence diagrams.
+ 
+ 
+Part 2: Implementation
+Build a production-ready system based on your design.
+2.1	Database Layer
+-	Complete schema with migrations (use a migration tool)
+-	Indexes for performance-critical queries
+-	Database seeding scripts with realistic test data:
+o	At least 3 restaurant locations
+o	20+ tables across locations
+o	30+ reservations spanning different dates/times
+o	10+ customer profiles
+-	Complex queries demonstrating your schema handles all requirements
+-	Transaction handling for critical operations
+2.2	Backend Services (Node.js with TypeScript)
+Implement at least three separate services with:
+Service Requirements:
+-	Written in TypeScript with strict type checking enabled
+-	Clean architecture with separation of concerns (controllers, services, repositories)
+-	Proper TypeScript interfaces and types for all data structures
+-	Input validation and sanitization using libraries like Zod or class-validator
+-	Comprehensive error handling with appropriate HTTP status codes
+-	Logging with different levels (debug, info, warn, error)
+-	Health check and readiness endpoints
+-	Graceful shutdown handling
+-	Environment-based configuration with type-safe environment variables
+-	API documentation (Swagger/OpenAPI)
+TypeScript Best Practices:
+-	No use of any type (use unknown when necessary)
+-	Proper type definitions for all functions and variables
+-	Use of TypeScript utility types where appropriate
+ 
+-	Generic types for reusable components
+-	Strict null checks enabled
+-	Type guards for runtime type safety
+Technical Requirements:
+-	Implement proper authentication and authorization
+-	Handle concurrent requests safely (demonstrate with critical sections)
+-	Use database transactions where appropriate
+-	Implement retry logic for inter-service communication
+-	Add request correlation IDs for tracing
+-	Rate limiting on public endpoints
+-	Input validation middleware with type safety
+Code Quality:
+-	Follow consistent code style (use ESLint with TypeScript rules and Prettier)
+-	Meaningful variable and function names
+-	Proper error handling (no silent failures)
+-	DRY principles
+-	SOLID principles where applicable
+-	Comprehensive JSDoc comments for complex functions
+2.3	Frontend Application (React with TypeScript)
+Build a professional user interface with:
+Architecture:
+-	Written in TypeScript with proper type definitions
+-	Component hierarchy following best practices
+-	State management solution (Context API, Redux, or similar with TypeScript)
+-	Custom hooks with proper typing for reusable logic
+-	Proper separation of concerns (components, services, utilities)
+-	Type-safe API client with interfaces matching backend contracts
+TypeScript Requirements:
+-	Proper typing for all props and state
+-	Type-safe Redux actions and reducers (if using Redux)
+ 
+-	Custom hooks with proper generic types
+-	Type definitions for API responses
+-	Avoid any type throughout the application
+-	Use TypeScript utility types (Partial, Pick, Omit, etc.)
+Features:
+-	Search interface with filters (date, time, party size, location)
+-	Visual table availability display
+-	Multi-step reservation flow with validation
+-	Reservation management (view, modify, cancel)
+-	Real-time updates (WebSockets or polling)
+-	Loading states and error handling
+-	Responsive design for mobile and desktop
+Code Quality:
+-	Reusable components with proper TypeScript interfaces
+-	TypeScript for complete type safety
+-	Error boundaries for graceful error handling
+-	Accessibility considerations (semantic HTML, ARIA labels)
+-	Performance optimization (memoization, lazy loading)
+2.4	Testing
+Implement testing at multiple levels:
+-	Unit tests for business logic and utilities (with TypeScript)
+-	Integration tests for API endpoints
+-	Database transaction tests
+-	Mock external service dependencies with proper typing
+-	Test concurrent scenarios (race conditions)
+-	Type-safe test utilities and fixtures
+-	Minimum 60% code coverage for backend services
+ 
+2.5	Deployment & DevOps
+Prepare your application for deployment:
+-	Docker containers for each service
+-	Docker Compose for local development
+-	Environment variable management
+-	Database initialization in containers
+-	Service orchestration and dependencies
+-	Volume management for data persistence
+-	TypeScript build process in Docker
+
+Part 3: Version Control & Documentation
+3.1	Git Repository
+Demonstrate professional Git practices:
+-	Feature branch workflow
+-	Descriptive commit messages following conventional commits
+-	Logical commit history (atomic commits)
+-	Pull request descriptions (create at least 2 example PRs)
+-	.gitignore properly configured
+-	No sensitive data in repository
+3.2	Documentation
+Create comprehensive documentation:
+README.md:
+-	System overview with architecture diagram
+-	Technology stack with version requirements
+-	Complete setup instructions
+-	How to run tests
+-	API documentation or link to Swagger
+-	Environment variables reference
+-	Troubleshooting common issues
+ 
+API Documentation:
+-	Complete endpoint reference
+-	Request/response examples with TypeScript interfaces
+-	Authentication requirements
+-	Error codes and meanings
+Architecture Documentation:
+-	Service interaction diagrams
+-	Database schema with relationships
+-	Deployment architecture
+-	Security considerations
+TypeScript Documentation:
+-	Key type definitions and interfaces
+-	Shared types between services
+-	Type safety patterns used
+
+Part 4: Reflection & Analysis
+Write a technical document (3-4 pages) covering:
+4.1	Architectural Decisions
+-	Why did you choose your specific service boundaries?
+-	What tradeoffs did you consider for service communication?
+-	How did you approach data consistency?
+-	What patterns did you implement and why?
+-	Database choice rationale (PostgreSQL vs MySQL)
+4.2	Technical Challenges
+-	What was the most complex problem you solved?
+-	How did you handle concurrent reservations?
+-	What performance optimizations did you implement?
+-	How did you ensure data integrity?
+-	How did TypeScript improve your development process?
+ 
+4.3	Production Readiness
+-	What monitoring would you add for production?
+-	How would you handle scaling beyond initial requirements?
+-	What security considerations did you implement?
+-	What additional features would you prioritize next?
+4.4	Learning & Growth
+-	What new concepts did you research and implement?
+-	What would you do differently knowing what you know now?
+-	What aspects of the system are you most proud of?
+-	How did strong typing benefit the project?
+
+Technical Stack
+Required:
+-	Language: TypeScript (strict mode enabled)
+-	Database: PostgreSQL OR MySQL (choose one and justify)
+-	Backend: Node.js with Express or NestJS
+-	Frontend: React with TypeScript
+-	Version Control: Git with clear workflow
+-	Containerization: Docker and Docker Compose
+Your Choices:
+-	State management library (Redux Toolkit with TypeScript recommended)
+-	ORM or query builder (TypeORM, Prisma, or Sequelize)
+-	Testing frameworks (Jest with ts-jest recommended)
+-	Inter-service communication method
+-	Real-time communication approach
+-	Additional tools and libraries
+ 
+Deliverables
+1.	Design Documentation
+o	System architecture with diagrams
+o	Complete database schemas
+o	API specifications
+o	Sequence diagrams for critical flows
+o	Scalability considerations
+o	Database choice justification
+2.	Git Repository
+o	Complete, working TypeScript source code
+o	Database migration scripts
+o	Docker configuration
+o	Comprehensive README
+o	Test suite
+o	Clear commit history with feature branches
+o	tsconfig.json with strict settings
+3.	Technical Reflection (3-4 pages)
+o	Architectural decisions and rationale
+o	Database selection reasoning
+o	Challenges and solutions
+o	Production considerations
+o	Future improvements
+o	Learning outcomes
+o	TypeScript benefits and challenges
+4.	Deployed System
+o	Instructions to run everything via Docker Compose
+o	Seeded database with test data
+o	Working API with documentation
+o	Functional frontend application
+ 
+Evaluation Criteria
+
+Aspect	What We Evaluate	Weight
+Architecture	Service design, scalability thinking, pattern usage, database choice	25%
+Implementation	Code quality, TypeScript usage, error handling, performance, security	30%
+Problem Solving	Concurrency handling, data consistency, edge cases	20%
+Testing	Test coverage, test quality, integration tests, type safety in tests	10%
+Documentation	Clarity, completeness, professionalism	10%
+DevOps	Containerization, deployment readiness, configuration	5%
+
+Advanced Challenges (Optional)
+Attempt these only after completing core requirements:
+-	Implement Redis caching with cache invalidation strategy
+-	Add comprehensive logging with log aggregation (ELK stack or similar)
+-	Implement API rate limiting with Redis
+-	Add WebSocket support for real-time table status updates
+-	Create admin dashboard for restaurant management
+-	Implement email notifications for reservations
+-	Add metrics collection (Prometheus/Grafana)
+-	Implement circuit breaker pattern for service communication
+-	Add database connection pooling with monitoring
+-	Create load testing scenarios and document results
+-	Implement GraphQL API alongside REST
+-	Add end-to-end testing
+ 
+Submission Instructions
+Send your submission to chanduj@orelcorp.com including:
+1.	Git repository link (public or grant access)
+2.	Design documentation with database choice justification
+3.	Technical reflection document
+Deadline: January 10, 2026
+For technical questions or blocking issues, reach out for clarification. We want to see your problem-solving approach and communication skills.
+
+What Distinguishes Excellent Work
+Good Submission:
+-	Meets all requirements
+-	Code works correctly with TypeScript
+-	Clear documentation
+Excellent Submission:
+-	Thoughtful architecture with clear justification
+-	Handles edge cases and failure scenarios
+-	Clean, maintainable TypeScript code following best practices
+-	Strong type safety throughout the application
+-	Comprehensive testing with type-safe tests
+-	Production-ready considerations
+-	Demonstrates deep understanding of concepts
+-	Well-reasoned database choice with clear tradeoffs
+ 
+Final Notes
+Focus on building something reliable that demonstrates professional software engineering skills. We value solid fundamentals, strong typing, and clear thinking over excessive complexity.
+There is no single correct answer to this assessment. We want to understand:
+-	How you think through complex problems
+-	How you make technical decisions and justify them
+-	How you implement clean, type-safe code
+-	How you learn and adapt
+-	How you communicate your work
+Remember: A complete, well-thought-out solution with strong fundamentals is far more valuable than an incomplete advanced solution.
+Good luck! We look forward to reviewing your architectural decisions and TypeScript implementation approach.
+
+
+Contact for questions: chanduj@orelcorp.com

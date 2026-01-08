@@ -31,6 +31,7 @@ reservationApi.interceptors.response.use(
       localStorage.removeItem('user');
       window.location.href = '/login';
     }
+    // 429 errors will be handled by individual thunks with user-friendly messages
     return Promise.reject(error);
   }
 );

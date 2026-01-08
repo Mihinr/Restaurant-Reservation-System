@@ -15,6 +15,8 @@ export function SearchPage() {
     time: '19:00',
     partySize: 2,
   });
+  const [filters, setFilters] = useState({ city: '', state: '' });
+  const [dateError, setDateError] = useState<string | null>(null);
   const [selectedTable, setSelectedTable] = useState<TableAvailability | null>(null);
   const [reservationDetails, setReservationDetails] = useState({
     customerName: '',
@@ -31,17 +33,35 @@ export function SearchPage() {
   );
 
   useEffect(() => {
-    dispatch(fetchRestaurants());
-  }, [dispatch]);
+    dispatch(fetchRestaurants(filters.city || filters.state ? filters : undefined));
+  }, [dispatch, filters.city, filters.state]);
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedDate = new Date(e.target.value);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+      setDateError('Date must be today or in the future');
+    } else {
+      setDateError(null);
+      setSearchCriteria({ ...searchCriteria, date: e.target.value });
+    }
+  };
 
   const handleSearch = async (e: FormEvent) => {
     e.preventDefault();
+    if (dateError) return;
     if (searchCriteria.restaurantId) {
       dispatch(searchAvailability({ ...searchCriteria, restaurantId: searchCriteria.restaurantId }));
       setSelectedTable(null);
       setShowReservationForm(false);
     }
   };
+
+  const uniqueCities = Array.from(new Set(restaurants.map((r) => r.city))).sort();
+  const uniqueStates = Array.from(new Set(restaurants.map((r) => r.state))).sort();
 
   const handleTableSelect = (table: TableAvailability) => {
     setSelectedTable(table);
@@ -73,31 +93,91 @@ export function SearchPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6">
       <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Search for Available Tables</h1>
-      <form onSubmit={handleSearch} className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      
+      {/* Restaurant Filters */}
+      <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-4">
+        <h2 className="text-lg font-semibold mb-3">Filter Restaurants</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Restaurant</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
             <select
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={searchCriteria.restaurantId}
-              onChange={(e) => setSearchCriteria({ ...searchCriteria, restaurantId: e.target.value })}
-              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+              value={filters.city}
+              onChange={(e) => setFilters({ ...filters, city: e.target.value })}
             >
-              <option value="">Select a restaurant</option>
-              {restaurants.map((restaurant) => (
-                <option key={restaurant.id} value={restaurant.id}>
-                  {restaurant.name}
+              <option value="">All Cities</option>
+              {uniqueCities.map((city) => (
+                <option key={city} value={city}>
+                  {city}
                 </option>
               ))}
             </select>
           </div>
-          <Input
-            type="date"
-            label="Date"
-            value={searchCriteria.date}
-            onChange={(e) => setSearchCriteria({ ...searchCriteria, date: e.target.value })}
-            required
-          />
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+            <select
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+              value={filters.state}
+              onChange={(e) => setFilters({ ...filters, state: e.target.value })}
+            >
+              <option value="">All States</option>
+              {uniqueStates.map((state) => (
+                <option key={state} value={state}>
+                  {state}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {(filters.city || filters.state) && (
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setFilters({ city: '', state: '' })}
+            className="mt-3 text-sm"
+          >
+            Clear Filters
+          </Button>
+        )}
+      </div>
+
+      {restaurants.length === 0 ? (
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6">
+          <p className="text-gray-600 text-sm sm:text-base">No restaurants found matching your filters.</p>
+        </div>
+      ) : (
+        <form onSubmit={handleSearch} className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Restaurant</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
+                value={searchCriteria.restaurantId}
+                onChange={(e) => setSearchCriteria({ ...searchCriteria, restaurantId: e.target.value })}
+                required
+              >
+                <option value="">Select a restaurant</option>
+                {restaurants.map((restaurant) => (
+                  <option key={restaurant.id} value={restaurant.id}>
+                    {restaurant.name} - {restaurant.city}, {restaurant.state}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <input
+                type="date"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base ${
+                  dateError ? 'border-red-500' : 'border-gray-300'
+                }`}
+                value={searchCriteria.date}
+                onChange={handleDateChange}
+                min={format(new Date(), 'yyyy-MM-dd')}
+                required
+              />
+              {dateError && <p className="mt-1 text-xs sm:text-sm text-red-500">{dateError}</p>}
+            </div>
           <Input
             type="time"
             label="Time"
@@ -118,6 +198,7 @@ export function SearchPage() {
           Search
         </Button>
       </form>
+      )}
 
       {availableTables.length > 0 && (
         <div>

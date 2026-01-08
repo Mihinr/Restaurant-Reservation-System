@@ -54,6 +54,47 @@ export const fetchWaitlistByRestaurant = createAsyncThunk(
   }
 );
 
+export const updateWaitlistStatus = createAsyncThunk(
+  'waitlist/updateWaitlistStatus',
+  async (
+    { id, status }: { id: string; status: WaitlistEntry['status'] },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await waitlistService.updateWaitlistStatus(id, status);
+      return response.data;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          'Failed to update waitlist status';
+        return rejectWithValue(errorMessage);
+      }
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue('Failed to update waitlist status');
+    }
+  }
+);
+
+export const removeFromWaitlist = createAsyncThunk(
+  'waitlist/removeFromWaitlist',
+  async (id: string, { rejectWithValue }) => {
+    try {
+      await waitlistService.removeFromWaitlist(id);
+      return id;
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue('Failed to remove from waitlist');
+    }
+  }
+);
+
 const waitlistSlice = createSlice({
   name: 'waitlist',
   initialState,
@@ -87,6 +128,33 @@ const waitlistSlice = createSlice({
         state.entries = action.payload;
       })
       .addCase(fetchWaitlistByRestaurant.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(updateWaitlistStatus.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updateWaitlistStatus.fulfilled, (state, action) => {
+        state.isLoading = false;
+        const index = state.entries.findIndex((entry) => entry.id === action.payload.id);
+        if (index !== -1) {
+          state.entries[index] = action.payload;
+        }
+      })
+      .addCase(updateWaitlistStatus.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(removeFromWaitlist.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(removeFromWaitlist.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.entries = state.entries.filter((entry) => entry.id !== action.payload);
+      })
+      .addCase(removeFromWaitlist.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       });

@@ -72,7 +72,25 @@ export function ReservationPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6">
       <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">My Reservations</h1>
-      {error && <p className="text-red-500 mb-4 text-sm">{error}</p>}
+      {error && (
+        <div
+          className={`mb-4 p-3 rounded-md text-sm ${
+            error.includes('rate limit') || error.includes('Too many requests')
+              ? 'bg-yellow-50 border border-yellow-200 text-yellow-800'
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}
+        >
+          <p className="font-medium">
+            {error.includes('rate limit') || error.includes('Too many requests') ? '⚠️ ' : '❌ '}
+            {error}
+          </p>
+          {(error.includes('rate limit') || error.includes('Too many requests')) && (
+            <p className="mt-2 text-xs">
+              Some reservation details may be incomplete. Please refresh in a moment.
+            </p>
+          )}
+        </div>
+      )}
       {reservations.length === 0 ? (
         <p className="text-gray-600 text-sm sm:text-base">You have no reservations yet.</p>
       ) : (
@@ -148,6 +166,20 @@ export function ReservationPage() {
                   <h3 className="font-bold text-base sm:text-lg mb-3 sm:mb-4">
                     {reservation.reservationNumber}
                   </h3>
+                  {reservation.restaurantName && (
+                    <div className="mb-3 sm:mb-4">
+                      <span className="text-gray-600 font-medium">Restaurant:</span>{' '}
+                      <span className="text-gray-900 font-semibold">
+                        {reservation.restaurantName}
+                        {reservation.restaurantCity && reservation.restaurantState && (
+                          <span className="font-normal">
+                            {' - '}
+                            {reservation.restaurantCity}, {reservation.restaurantState}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 text-sm sm:text-base mb-4">
                     <div>
                       <span className="text-gray-600 font-medium">Date:</span>{' '}
@@ -165,6 +197,12 @@ export function ReservationPage() {
                       <span className="text-gray-600 font-medium">Party Size:</span>{' '}
                       <span className="text-gray-900">{reservation.partySize}</span>
                     </div>
+                    {reservation.tableNumber && (
+                      <div>
+                        <span className="text-gray-600 font-medium">Table:</span>{' '}
+                        <span className="text-gray-900">{reservation.tableNumber}</span>
+                      </div>
+                    )}
                     <div>
                       <span className="text-gray-600 font-medium">Status:</span>{' '}
                       <span className="text-gray-900 capitalize">{reservation.status.toLowerCase()}</span>

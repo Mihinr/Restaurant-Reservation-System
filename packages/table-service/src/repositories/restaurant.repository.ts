@@ -34,6 +34,19 @@ export class RestaurantRepository {
     });
   }
 
+  async findByIds(ids: string[]): Promise<Restaurant[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    return this.prisma.restaurant.findMany({
+      where: {
+        id: {
+          in: ids,
+        },
+      },
+    });
+  }
+
   async findAll(filters?: { city?: string; state?: string; isActive?: boolean }): Promise<Restaurant[]> {
     return this.prisma.restaurant.findMany({
       where: {

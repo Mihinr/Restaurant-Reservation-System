@@ -29,6 +29,11 @@ export const authService = {
     return { data: response.data.data };
   },
 
+  async updateProfile(data: { firstName?: string; lastName?: string; phone?: string }): Promise<{ data: User }> {
+    const response = await api.put<{ success: boolean; data: User }>('/api/v1/users/me', data);
+    return { data: response.data.data };
+  },
+
   async logout(): Promise<void> {
     await api.post('/api/v1/auth/logout');
     localStorage.removeItem('token');

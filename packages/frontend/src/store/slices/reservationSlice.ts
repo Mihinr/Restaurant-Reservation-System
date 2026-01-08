@@ -23,6 +23,31 @@ export const fetchReservations = createAsyncThunk(
       const response = await reservationService.getReservations();
       return response.data;
     } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { 
+          response?: { 
+            status?: number;
+            data?: { error?: string; message?: string };
+            statusText?: string;
+          } 
+        };
+        
+        // Handle rate limiting specifically
+        if (axiosError.response?.status === 429) {
+          return rejectWithValue(
+            axiosError.response?.data?.message ||
+            axiosError.response?.data?.error ||
+            'Too many requests. Please wait a moment and try again.'
+          );
+        }
+        
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          axiosError.response?.statusText ||
+          'Failed to fetch reservations';
+        return rejectWithValue(errorMessage);
+      }
       if (error instanceof Error) {
         return rejectWithValue(error.message);
       }

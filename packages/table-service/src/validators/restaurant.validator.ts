@@ -17,6 +17,11 @@ export const updateRestaurantSchema = createRestaurantSchema.partial().extend({
   isActive: z.boolean().optional(),
 });
 
+export const batchRestaurantSchema = z.object({
+  ids: z.array(z.string().uuid('Invalid restaurant ID')).min(1, 'At least one restaurant ID is required').max(100, 'Maximum 100 restaurant IDs allowed'),
+});
+
 export type CreateRestaurantInput = z.infer<typeof createRestaurantSchema>;
 export type UpdateRestaurantInput = z.infer<typeof updateRestaurantSchema>;
+export type BatchRestaurantInput = z.infer<typeof batchRestaurantSchema>;
 

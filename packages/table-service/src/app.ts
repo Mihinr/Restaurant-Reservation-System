@@ -18,9 +18,11 @@ export function createApp(prisma: PrismaClient): Express {
   app.use(express.urlencoded({ extended: true }));
 
   const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 500, // Increased to handle batch requests from reservation service
     message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
   });
 
   app.use('/api/v1', limiter);
