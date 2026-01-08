@@ -1,4 +1,4 @@
-import { PrismaClient, Reservation, ReservationStatus } from '../../node_modules/.prisma/reservation-service-client';
+import { PrismaClient, Reservation, ReservationStatus } from '@prisma/client';
 import { CreateReservationDto, UpdateReservationDto } from '@restaurant-reservation/shared';
 
 export class ReservationRepository {
@@ -44,6 +44,12 @@ export class ReservationRepository {
   async findByUserId(userId: string): Promise<Reservation[]> {
     return this.prisma.reservation.findMany({
       where: { userId },
+      orderBy: [{ reservationDate: 'desc' }, { reservationTime: 'desc' }],
+    });
+  }
+
+  async findAll(): Promise<Reservation[]> {
+    return this.prisma.reservation.findMany({
       orderBy: [{ reservationDate: 'desc' }, { reservationTime: 'desc' }],
     });
   }

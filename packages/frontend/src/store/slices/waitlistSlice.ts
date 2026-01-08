@@ -4,6 +4,7 @@ import { WaitlistEntry, CreateWaitlistEntryDto } from '@restaurant-reservation/s
 
 interface WaitlistState {
   entries: WaitlistEntry[];
+  myWaitlistEntries: WaitlistEntry[]; // Customer's own waitlist entries
   currentEntry: WaitlistEntry | null;
   isLoading: boolean;
   error: string | null;
@@ -11,6 +12,7 @@ interface WaitlistState {
 
 const initialState: WaitlistState = {
   entries: [],
+  myWaitlistEntries: [],
   currentEntry: null,
   isLoading: false,
   error: null,
@@ -50,6 +52,47 @@ export const fetchWaitlistByRestaurant = createAsyncThunk(
         return rejectWithValue(error.message);
       }
       return rejectWithValue('Failed to fetch waitlist');
+    }
+  }
+);
+
+export const fetchMyWaitlist = createAsyncThunk(
+  'waitlist/fetchMyWaitlist',
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await waitlistService.getMyWaitlist();
+      return response.data;
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue('Failed to fetch waitlist');
+    }
+  }
+);
+
+export const respondToNotification = createAsyncThunk(
+  'waitlist/respondToNotification',
+  async (
+    { id, action }: { id: string; action: 'accept' | 'decline' },
+    { rejectWithValue }
+  ) => {
+    try {
+      const response = await waitlistService.respondToNotification(id, action);
+      return response.data;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          'Failed to respond to notification';
+        return rejectWithValue(errorMessage);
+      }
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue('Failed to respond to notification');
     }
   }
 );
@@ -101,6 +144,7 @@ const waitlistSlice = createSlice({
   reducers: {
     clearWaitlist: (state) => {
       state.entries = [];
+      state.myWaitlistEntries = [];
       state.currentEntry = null;
     },
   },
@@ -114,6 +158,7 @@ const waitlistSlice = createSlice({
         state.isLoading = false;
         state.currentEntry = action.payload;
         state.entries.push(action.payload);
+        state.myWaitlistEntries.push(action.payload);
       })
       .addCase(joinWaitlist.rejected, (state, action) => {
         state.isLoading = false;
@@ -141,6 +186,10 @@ const waitlistSlice = createSlice({
         if (index !== -1) {
           state.entries[index] = action.payload;
         }
+        const myIndex = state.myWaitlistEntries.findIndex((entry) => entry.id === action.payload.id);
+        if (myIndex !== -1) {
+          state.myWaitlistEntries[myIndex] = action.payload;
+        }
       })
       .addCase(updateWaitlistStatus.rejected, (state, action) => {
         state.isLoading = false;
@@ -153,8 +202,41 @@ const waitlistSlice = createSlice({
       .addCase(removeFromWaitlist.fulfilled, (state, action) => {
         state.isLoading = false;
         state.entries = state.entries.filter((entry) => entry.id !== action.payload);
+        state.myWaitlistEntries = state.myWaitlistEntries.filter((entry) => entry.id !== action.payload);
       })
       .addCase(removeFromWaitlist.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(fetchMyWaitlist.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(fetchMyWaitlist.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.myWaitlistEntries = action.payload;
+      })
+      .addCase(fetchMyWaitlist.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(respondToNotification.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(respondToNotification.fulfilled, (state, action) => {
+        state.isLoading = false;
+        const myIndex = state.myWaitlistEntries.findIndex((entry) => entry.id === action.payload.id);
+        if (myIndex !== -1) {
+          state.myWaitlistEntries[myIndex] = action.payload;
+        }
+        // Also update entries array if it exists (for staff view)
+        const index = state.entries.findIndex((entry) => entry.id === action.payload.id);
+        if (index !== -1) {
+          state.entries[index] = action.payload;
+        }
+      })
+      .addCase(respondToNotification.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
       });

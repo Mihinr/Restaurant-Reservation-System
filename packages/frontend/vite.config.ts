@@ -7,7 +7,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@restaurant-reservation/shared': path.resolve(__dirname, '../shared/dist/index.js'),
     },
+  },
+  optimizeDeps: {
+    include: ['@restaurant-reservation/shared'],
   },
   server: {
     port: 5173,

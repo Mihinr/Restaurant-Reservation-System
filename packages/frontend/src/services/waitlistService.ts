@@ -50,5 +50,20 @@ export const waitlistService = {
   async removeFromWaitlist(id: string): Promise<void> {
     await reservationApi.delete(`/api/v1/waitlist/${id}`);
   },
+
+  async getMyWaitlist(): Promise<{ data: WaitlistEntry[] }> {
+    const response = await reservationApi.get<{ success: boolean; data: WaitlistEntry[] }>(
+      '/api/v1/waitlist/me'
+    );
+    return { data: response.data.data };
+  },
+
+  async respondToNotification(id: string, action: 'accept' | 'decline'): Promise<{ data: WaitlistEntry }> {
+    const response = await reservationApi.put<{ success: boolean; data: WaitlistEntry; message?: string }>(
+      `/api/v1/waitlist/${id}/respond`,
+      { action }
+    );
+    return { data: response.data.data };
+  },
 };
 

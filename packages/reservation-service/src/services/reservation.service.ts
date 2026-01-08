@@ -1,4 +1,4 @@
-import { PrismaClient } from '../node_modules/.prisma/reservation-service-client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { ReservationRepository } from '../repositories/reservation.repository';
 import {
   CreateReservationDto,
@@ -8,6 +8,7 @@ import {
 import { NotFoundError, ConflictError, BadRequestError } from '../errors/AppError';
 import { generateReservationNumber } from '../utils/reservationNumber';
 import { getEnvConfig } from '../config/env';
+import { logger } from '../config/logger';
 import axios from 'axios';
 
 export class ReservationService {
@@ -23,31 +24,55 @@ export class ReservationService {
     }
 
     if (data.tableId) {
+      // Check for conflicting reservations (active ones only)
+      const reservationDate = new Date(data.reservationDate);
+      const [hours, minutes] = data.reservationTime.split(':').map(Number);
+      const reservationTime = new Date();
+      reservationTime.setHours(hours, minutes, 0, 0);
+      
       const conflicting = await this.reservationRepository.findConflictingReservations(
         data.tableId,
-        new Date(data.reservationDate),
-        new Date(`2000-01-01T${data.reservationTime}:00`),
+        reservationDate,
+        reservationTime,
         90
       );
 
       if (conflicting.length > 0) {
-        throw new ConflictError('Table is already reserved for this time slot');
+        throw new ConflictError('This table is already reserved for the selected date and time');
       }
     }
 
     const reservationNumber = generateReservationNumber();
 
-    const reservation = await this.prisma.$transaction(async (tx) => {
-      const repo = new ReservationRepository(tx as unknown as PrismaClient);
-      return repo.create({
-        ...data,
-        userId,
-        reservationNumber,
+    try {
+      const reservation = await this.prisma.$transaction(async (tx) => {
+        const repo = new ReservationRepository(tx as unknown as PrismaClient);
+        return repo.create({
+          ...data,
+          userId,
+          reservationNumber,
+        });
       });
-    });
 
-    const enriched = await this.enrichReservationsWithExternalData([reservation]);
-    return enriched[0];
+      const enriched = await this.enrichReservationsWithExternalData([reservation]);
+      return enriched[0];
+    } catch (error) {
+      // Handle Prisma unique constraint errors
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          const target = error.meta?.target as string[] | undefined;
+          if (target && target.includes('table_id') && target.includes('reservation_date') && target.includes('reservation_time')) {
+            throw new ConflictError('This table is already reserved for the selected date and time');
+          }
+          if (target && target.includes('reservationNumber')) {
+            // This should be extremely rare, but handle it
+            throw new ConflictError('A reservation with this number already exists. Please try again.');
+          }
+        }
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   async getReservationById(id: string): Promise<ReservationType> {
@@ -61,6 +86,11 @@ export class ReservationService {
 
   async getReservationsByUser(userId: string): Promise<ReservationType[]> {
     const reservations = await this.reservationRepository.findByUserId(userId);
+    return await this.enrichReservationsWithExternalData(reservations);
+  }
+
+  async getAllReservations(): Promise<ReservationType[]> {
+    const reservations = await this.reservationRepository.findAll();
     return await this.enrichReservationsWithExternalData(reservations);
   }
 
@@ -174,7 +204,12 @@ export class ReservationService {
       if (error instanceof Error && error.message.includes('Rate limit exceeded')) {
         throw error;
       }
-      // For other errors, continue with empty maps (graceful degradation)
+      // For other errors (network failures, service unavailable, etc.), 
+      // log the error and continue with empty maps (graceful degradation)
+      logger.warn('Failed to enrich reservation data with external service', {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
       restaurantMap = new Map();
       tableMap = new Map();
     }
@@ -242,8 +277,20 @@ export class ReservationService {
         );
       }
       
-      // Log other errors but don't fail the entire request
-      console.warn('Failed to batch fetch restaurants:', error);
+      // For network errors, timeouts, or service unavailable, log and return empty map
+      // This allows the reservation to be created even if enrichment fails
+      if (axios.isAxiosError(error)) {
+        logger.warn('Failed to batch fetch restaurants', {
+          message: error.message,
+          code: error.code,
+          status: error.response?.status,
+          url: `${tableServiceUrl}/api/v1/restaurants/batch`,
+        });
+      } else {
+        logger.warn('Failed to batch fetch restaurants', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     
     return restaurantMap;
@@ -286,8 +333,20 @@ export class ReservationService {
         );
       }
       
-      // Log other errors but don't fail the entire request
-      console.warn('Failed to batch fetch tables:', error);
+      // For network errors, timeouts, or service unavailable, log and return empty map
+      // This allows the reservation to be created even if enrichment fails
+      if (axios.isAxiosError(error)) {
+        logger.warn('Failed to batch fetch tables', {
+          message: error.message,
+          code: error.code,
+          status: error.response?.status,
+          url: `${tableServiceUrl}/api/v1/tables/batch`,
+        });
+      } else {
+        logger.warn('Failed to batch fetch tables', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     
     return tableMap;

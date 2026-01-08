@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
+import { isStaffOrAdmin } from '@restaurant-reservation/shared';
 
 export function Header() {
   const { user, token } = useAppSelector((state) => state.auth);
@@ -50,7 +51,7 @@ export function Header() {
             </Link>
             {token ? (
               <>
-                {(user?.role === 'STAFF' || user?.role === 'ADMIN') && (
+                {user && isStaffOrAdmin(user.role) && (
                   <Link to="/staff" className="hover:text-gray-300 transition-colors">
                     Staff Dashboard
                   </Link>
@@ -99,7 +100,7 @@ export function Header() {
             </Link>
             {token ? (
               <>
-                {(user?.role === 'STAFF' || user?.role === 'ADMIN') && (
+                {user && isStaffOrAdmin(user.role) && (
                   <Link
                     to="/staff"
                     className="block py-2 hover:text-gray-300 transition-colors"

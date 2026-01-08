@@ -1,7 +1,7 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { PrismaClient } from '../node_modules/.prisma/table-service-client';
+import { PrismaClient } from '@prisma/client';
 import { errorHandler } from './middlewares/errorHandler';
 import { createRestaurantRoutes } from './routes/restaurant.routes';
 import { createTableRoutes } from './routes/table.routes';

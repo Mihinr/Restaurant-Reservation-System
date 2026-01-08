@@ -2,9 +2,10 @@ import { useState, FormEvent, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchRestaurants } from '../../store/slices/restaurantSlice';
-import { joinWaitlist, fetchWaitlistByRestaurant } from '../../store/slices/waitlistSlice';
+import { joinWaitlist, fetchWaitlistByRestaurant, fetchMyWaitlist } from '../../store/slices/waitlistSlice';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { isStaffOrAdmin } from '@restaurant-reservation/shared';
 
 export function WaitlistPage() {
   const [selectedRestaurantId, setSelectedRestaurantId] = useState('');
@@ -17,18 +18,28 @@ export function WaitlistPage() {
 
   const dispatch = useAppDispatch();
   const { restaurants } = useAppSelector((state) => state.restaurant);
-  const { entries, isLoading, error, currentEntry } = useAppSelector((state) => state.waitlist);
+  const { entries, myWaitlistEntries, isLoading, error, currentEntry } = useAppSelector((state) => state.waitlist);
   const { user } = useAppSelector((state) => state.auth);
+
+  const isStaff = user && isStaffOrAdmin(user.role);
 
   useEffect(() => {
     dispatch(fetchRestaurants());
   }, [dispatch]);
 
+  // For customers: fetch their own waitlist entries
   useEffect(() => {
-    if (selectedRestaurantId) {
+    if (!isStaff && user) {
+      dispatch(fetchMyWaitlist());
+    }
+  }, [dispatch, isStaff, user]);
+
+  // For staff/admin: fetch restaurant's waitlist when restaurant is selected
+  useEffect(() => {
+    if (isStaff && selectedRestaurantId) {
       dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
     }
-  }, [dispatch, selectedRestaurantId]);
+  }, [dispatch, isStaff, selectedRestaurantId]);
 
   useEffect(() => {
     // Auto-fill from profile when form is shown
@@ -62,7 +73,12 @@ export function WaitlistPage() {
       });
       setShowForm(false);
       setWaitlistForm({ partySize: 2, name: '', phoneNumber: '' });
-      dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
+      // Refresh waitlist based on user role
+      if (isStaff) {
+        dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
+      } else {
+        dispatch(fetchMyWaitlist());
+      }
     }
   };
 
@@ -141,7 +157,61 @@ export function WaitlistPage() {
         )}
       </div>
 
-      {selectedRestaurantId && (
+      {/* For customers: Show their own waitlist entries */}
+      {!isStaff && (
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
+          <h2 className="text-lg sm:text-xl font-bold mb-4">My Waitlist Entries</h2>
+          {myWaitlistEntries.length === 0 ? (
+            <p className="text-gray-600 text-sm sm:text-base">
+              You don't have any active waitlist entries. Select a restaurant above to join a waitlist.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {myWaitlistEntries
+                .filter((entry) => entry.status !== 'CANCELLED')
+                .sort((a, b) => a.position - b.position)
+                .map((entry) => {
+                  const restaurant = restaurants.find((r) => r.id === entry.restaurantId);
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`p-3 border rounded ${
+                        entry.status === 'NOTIFIED'
+                          ? 'border-yellow-400 bg-yellow-50'
+                          : entry.status === 'SEATED'
+                            ? 'border-green-400 bg-green-50'
+                            : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-sm sm:text-base">
+                            {restaurant?.name || 'Restaurant'}
+                          </p>
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            Party of {entry.partySize} • {entry.phoneNumber}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Status: <span className="font-semibold">{entry.status}</span>
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-sm sm:text-base">#{entry.position}</p>
+                          {entry.estimatedWaitTime && (
+                            <p className="text-xs text-gray-600">~{entry.estimatedWaitTime} min</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* For staff/admin: Show restaurant's waitlist */}
+      {isStaff && selectedRestaurantId && (
         <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
           <h2 className="text-lg sm:text-xl font-bold mb-4">Current Waitlist</h2>
           {entries.length === 0 ? (

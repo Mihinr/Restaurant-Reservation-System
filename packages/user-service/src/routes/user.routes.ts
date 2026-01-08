@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { PrismaClient } from '../node_modules/.prisma/user-service-client';
+import { PrismaClient } from '@prisma/client';
 import { UserController } from '../controllers/user.controller';
 import { UserService } from '../services/user.service';
 import { authenticate } from '../middlewares/auth.middleware';

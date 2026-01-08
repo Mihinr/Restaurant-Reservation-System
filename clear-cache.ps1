@@ -22,6 +22,11 @@ Get-ChildItem -Path 'packages' -Filter 'node_modules' -Recurse -Directory | ForE
 }
 Write-Host '✓ node_modules cache cleared' -ForegroundColor Green
 
+# Clear Vite cache
+Write-Host 'Clearing Vite cache...' -ForegroundColor Cyan
+Remove-Item -Path 'packages\frontend\node_modules\.vite' -Recurse -Force -ErrorAction SilentlyContinue
+Write-Host '✓ Vite cache cleared' -ForegroundColor Green
+
 Write-Host ''
 Write-Host 'Cache clearing complete!' -ForegroundColor Green
 Write-Host 'Now regenerate Prisma Client:' -ForegroundColor Yellow

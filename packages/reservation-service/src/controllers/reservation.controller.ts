@@ -3,10 +3,8 @@ import { Request } from 'express';
 import { z } from 'zod';
 import { ReservationService } from '../services/reservation.service';
 import { createReservationSchema, updateReservationSchema } from '../validators/reservation.validator';
-
-interface AuthRequest extends Request {
-  user?: { userId: string };
-}
+import { AuthRequest } from '../middlewares/auth.middleware';
+import { isStaffOrAdmin } from '@restaurant-reservation/shared';
 
 export class ReservationController {
   constructor(private reservationService: ReservationService) {}
@@ -20,13 +18,26 @@ export class ReservationController {
       return;
     }
 
-    // Validation already done by middleware, but we need to ensure type safety
-    const data = req.body as z.infer<typeof createReservationSchema>;
-    const reservation = await this.reservationService.createReservation(req.user.userId, data);
-    res.status(201).json({
-      success: true,
-      data: reservation,
-    });
+    try {
+      // Validation already done by middleware, but we need to ensure type safety
+      const data = req.body as z.infer<typeof createReservationSchema>;
+      const reservation = await this.reservationService.createReservation(req.user.userId, data);
+      res.status(201).json({
+        success: true,
+        data: reservation,
+      });
+    } catch (error) {
+      // Handle rate limiting errors specifically
+      if (error instanceof Error && error.message.includes('Rate limit exceeded')) {
+        res.status(429).json({
+          success: false,
+          error: error.message,
+          message: 'Too many requests. Please wait a moment and try again.',
+        });
+        return;
+      }
+      throw error; // Re-throw to be handled by error middleware
+    }
   }
 
   async getById(req: Request, res: Response): Promise<void> {
@@ -61,7 +72,14 @@ export class ReservationController {
     }
 
     try {
-      const reservations = await this.reservationService.getReservationsByUser(req.user.userId);
+      // If user is STAFF or ADMIN, return all reservations; otherwise return only their own
+      let reservations;
+      if (isStaffOrAdmin(req.user.role)) {
+        reservations = await this.reservationService.getAllReservations();
+      } else {
+        reservations = await this.reservationService.getReservationsByUser(req.user.userId);
+      }
+      
       res.json({
         success: true,
         data: reservations,

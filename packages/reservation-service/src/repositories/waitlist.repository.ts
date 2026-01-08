@@ -1,4 +1,4 @@
-import { PrismaClient, WaitlistEntry, WaitlistStatus } from '../../node_modules/.prisma/reservation-service-client';
+import { PrismaClient, WaitlistEntry, WaitlistStatus } from '@prisma/client';
 import { CreateWaitlistEntryDto } from '@restaurant-reservation/shared';
 
 export class WaitlistRepository {
@@ -38,6 +38,18 @@ export class WaitlistRepository {
         ...(status && { status }),
       },
       orderBy: { position: 'asc' },
+    });
+  }
+
+  async findByUserId(userId: string): Promise<WaitlistEntry[]> {
+    return this.prisma.waitlistEntry.findMany({
+      where: {
+        userId,
+        status: {
+          in: ['WAITING', 'NOTIFIED'],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

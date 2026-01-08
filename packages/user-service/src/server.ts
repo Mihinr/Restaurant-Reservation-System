@@ -1,4 +1,4 @@
-import { PrismaClient } from '../node_modules/.prisma/user-service-client';
+import { PrismaClient } from '@prisma/client';
 import { createApp } from './app';
 import { getEnvConfig } from './config/env';
 import { logger } from './config/logger';

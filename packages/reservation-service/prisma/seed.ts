@@ -1,4 +1,4 @@
-import { PrismaClient } from '../node_modules/.prisma/reservation-service-client';
+import { PrismaClient } from '@prisma/client';
 import { generateReservationNumber } from '../src/utils/reservationNumber';
 
 const prisma = new PrismaClient();

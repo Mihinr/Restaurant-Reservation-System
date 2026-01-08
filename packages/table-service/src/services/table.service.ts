@@ -1,4 +1,4 @@
-import { PrismaClient } from '../node_modules/.prisma/table-service-client';
+import { PrismaClient } from '@prisma/client';
 import { TableRepository } from '../repositories/table.repository';
 import {
   CreateTableDto,

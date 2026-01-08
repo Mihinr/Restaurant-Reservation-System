@@ -14,6 +14,7 @@ import { StaffDashboardPage } from './pages/Staff/StaffDashboardPage';
 import { LoginPage } from './pages/Auth/LoginPage';
 import { RegisterPage } from './pages/Auth/RegisterPage';
 import { NotFoundPage } from './pages/NotFound/NotFoundPage';
+import { USER_ROLES } from '@restaurant-reservation/shared';
 
 function App() {
   const dispatch = useAppDispatch();
@@ -71,7 +72,7 @@ function App() {
           <Route
             path="/staff"
             element={
-              <ProtectedRoute allowedRoles={['STAFF', 'ADMIN']}>
+              <ProtectedRoute allowedRoles={[USER_ROLES.STAFF, USER_ROLES.ADMIN]}>
                 <StaffDashboardPage />
               </ProtectedRoute>
             }

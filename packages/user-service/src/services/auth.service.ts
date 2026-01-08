@@ -1,4 +1,4 @@
-import { PrismaClient } from '../node_modules/.prisma/user-service-client';
+import { PrismaClient } from '@prisma/client';
 import { UserService } from './user.service';
 import { SessionRepository } from '../repositories/session.repository';
 import {

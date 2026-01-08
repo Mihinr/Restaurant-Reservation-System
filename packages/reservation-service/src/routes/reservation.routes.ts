@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { PrismaClient } from '../node_modules/.prisma/reservation-service-client';
+import { PrismaClient } from '@prisma/client';
 import { ReservationController } from '../controllers/reservation.controller';
 import { ReservationService } from '../services/reservation.service';
 import { validate } from '../middlewares/validate.middleware';

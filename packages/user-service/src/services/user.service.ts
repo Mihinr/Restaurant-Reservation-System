@@ -1,4 +1,4 @@
-import { PrismaClient } from '../node_modules/.prisma/user-service-client';
+import { PrismaClient } from '@prisma/client';
 import { UserRepository } from '../repositories/user.repository';
 import { CreateUserDto, UpdateUserDto, User as UserType } from '@restaurant-reservation/shared';
 import { hashPassword, comparePassword } from '../utils/password';

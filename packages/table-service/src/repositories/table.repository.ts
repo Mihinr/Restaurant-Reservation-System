@@ -1,4 +1,4 @@
-import { PrismaClient, Table, TableStatus } from '../../node_modules/.prisma/table-service-client';
+import { PrismaClient, Table, TableStatus } from '@prisma/client';
 import { CreateTableDto, UpdateTableDto } from '@restaurant-reservation/shared';
 
 export class TableRepository {

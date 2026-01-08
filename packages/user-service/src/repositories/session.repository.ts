@@ -1,4 +1,4 @@
-import { PrismaClient, UserSession } from '../../node_modules/.prisma/user-service-client';
+import { PrismaClient, UserSession } from '@prisma/client';
 import { hashPassword } from '../utils/password';
 
 export class SessionRepository {

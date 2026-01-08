@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { PrismaClient } from '../node_modules/.prisma/reservation-service-client';
+import { PrismaClient } from '@prisma/client';
 import { WaitlistController } from '../controllers/waitlist.controller';
 import { WaitlistService } from '../services/waitlist.service';
 import { validate } from '../middlewares/validate.middleware';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 import { createWaitlistEntrySchema } from '../validators/waitlist.validator';
+import { USER_ROLES } from '@restaurant-reservation/shared';
 
 export function createWaitlistRoutes(prisma: PrismaClient): Router {
   const router = Router();
@@ -16,18 +17,28 @@ export function createWaitlistRoutes(prisma: PrismaClient): Router {
     waitlistController.join(req as any, res).catch(next);
   });
 
+  // Customers can view their own waitlist entries
+  router.get('/me', authenticate, (req, res, next) => {
+    waitlistController.getByUser(req as any, res).catch(next);
+  });
+
   // Staff/Admin can view waitlist
-  router.get('/restaurants/:restaurantId', authenticate, authorize('STAFF', 'ADMIN'), (req, res, next) => {
+  router.get('/restaurants/:restaurantId', authenticate, authorize(USER_ROLES.STAFF, USER_ROLES.ADMIN), (req, res, next) => {
     waitlistController.getByRestaurant(req, res).catch(next);
   });
 
   // Staff/Admin can update waitlist status
-  router.put('/:id/status', authenticate, authorize('STAFF', 'ADMIN'), (req, res, next) => {
+  router.put('/:id/status', authenticate, authorize(USER_ROLES.STAFF, USER_ROLES.ADMIN), (req, res, next) => {
     waitlistController.updateStatus(req, res).catch(next);
   });
 
+  // Customers can accept/decline their own notifications
+  router.put('/:id/respond', authenticate, (req, res, next) => {
+    waitlistController.respondToNotification(req as any, res).catch(next);
+  });
+
   // Staff/Admin can remove from waitlist
-  router.delete('/:id', authenticate, authorize('STAFF', 'ADMIN'), (req, res, next) => {
+  router.delete('/:id', authenticate, authorize(USER_ROLES.STAFF, USER_ROLES.ADMIN), (req, res, next) => {
     waitlistController.remove(req, res).catch(next);
   });
 

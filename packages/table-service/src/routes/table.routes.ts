@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { PrismaClient } from '../node_modules/.prisma/table-service-client';
+import { PrismaClient } from '@prisma/client';
 import { TableController } from '../controllers/table.controller';
 import { TableService } from '../services/table.service';
 import { validate } from '../middlewares/validate.middleware';

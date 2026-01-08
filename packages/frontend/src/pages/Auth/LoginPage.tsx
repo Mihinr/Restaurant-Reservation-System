@@ -5,6 +5,7 @@ import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { login } from '../../store/slices/authSlice';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { isStaffOrAdmin } from '@restaurant-reservation/shared';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -25,7 +26,7 @@ export function LoginPage() {
     if (login.fulfilled.match(result)) {
       toast.success('Login successful!');
       // Redirect staff/admin to staff dashboard, customers to home
-      if (result.payload.user.role === 'STAFF' || result.payload.user.role === 'ADMIN') {
+      if (isStaffOrAdmin(result.payload.user.role)) {
         navigate('/staff');
       } else {
         navigate('/');

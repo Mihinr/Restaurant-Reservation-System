@@ -1,4 +1,4 @@
-import { PrismaClient } from '../node_modules/.prisma/reservation-service-client';
+import { PrismaClient } from '@prisma/client';
 import { WaitlistRepository } from '../repositories/waitlist.repository';
 import { CreateWaitlistEntryDto, WaitlistEntry as WaitlistEntryType } from '@restaurant-reservation/shared';
 import { NotFoundError } from '../errors/AppError';
@@ -23,8 +23,22 @@ export class WaitlistService {
   }
 
   async getWaitlistByRestaurant(restaurantId: string): Promise<WaitlistEntryType[]> {
-    const entries = await this.waitlistRepository.findByRestaurant(restaurantId, 'WAITING');
+    // Return all active entries (WAITING, NOTIFIED, SEATED) for staff dashboard
+    const entries = await this.waitlistRepository.findByRestaurant(restaurantId);
     return entries.map(this.mapToWaitlistEntryType);
+  }
+
+  async getWaitlistByUser(userId: string): Promise<WaitlistEntryType[]> {
+    const entries = await this.waitlistRepository.findByUserId(userId);
+    return entries.map(this.mapToWaitlistEntryType);
+  }
+
+  async getWaitlistEntryById(id: string): Promise<WaitlistEntryType | null> {
+    const entry = await this.waitlistRepository.findById(id);
+    if (!entry) {
+      return null;
+    }
+    return this.mapToWaitlistEntryType(entry);
   }
 
   async updateWaitlistStatus(id: string, status: WaitlistEntryType['status']): Promise<WaitlistEntryType> {

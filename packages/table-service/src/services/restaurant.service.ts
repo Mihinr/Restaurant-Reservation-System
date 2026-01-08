@@ -1,4 +1,4 @@
-import { PrismaClient } from '../node_modules/.prisma/table-service-client';
+import { PrismaClient } from '@prisma/client';
 import { RestaurantRepository } from '../repositories/restaurant.repository';
 import {
   CreateRestaurantDto,
