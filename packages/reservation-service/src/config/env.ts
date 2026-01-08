@@ -19,6 +19,7 @@ const envSchema = z.object({
   PORT: z.string().transform(Number).pipe(z.number().int().positive()),
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  TABLE_SERVICE_URL: z.string().url().default('http://localhost:3003'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });
 

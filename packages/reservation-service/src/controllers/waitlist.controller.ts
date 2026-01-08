@@ -2,10 +2,7 @@ import { Response } from 'express';
 import { Request } from 'express';
 import { WaitlistService } from '../services/waitlist.service';
 import { createWaitlistEntrySchema } from '../validators/waitlist.validator';
-
-interface AuthRequest extends Request {
-  user?: { userId: string };
-}
+import { AuthRequest } from '../middlewares/auth.middleware';
 
 export class WaitlistController {
   constructor(private waitlistService: WaitlistService) {}

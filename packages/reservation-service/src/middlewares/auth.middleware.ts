@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { getEnvConfig } from '../config/env';
-import { UnauthorizedError } from '../errors/AppError';
+import { UnauthorizedError, ForbiddenError } from '../errors/AppError';
+import { UserRole } from '@restaurant-reservation/shared';
 
 export interface TokenPayload {
   userId: string;
   email: string;
-  role: string;
+  role: UserRole;
 }
 
 export interface AuthRequest extends Request {
@@ -39,5 +40,19 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
     }
     return next(new UnauthorizedError('Authentication failed'));
   }
+}
+
+export function authorize(...roles: UserRole[]) {
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      return next(new UnauthorizedError('Authentication required'));
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return next(new ForbiddenError('Insufficient permissions'));
+    }
+
+    next();
+  };
 }
 

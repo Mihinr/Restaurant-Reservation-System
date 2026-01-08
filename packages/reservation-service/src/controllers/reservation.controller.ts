@@ -31,11 +31,24 @@ export class ReservationController {
 
   async getById(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
-    const reservation = await this.reservationService.getReservationById(id);
-    res.json({
-      success: true,
-      data: reservation,
-    });
+    try {
+      const reservation = await this.reservationService.getReservationById(id);
+      res.json({
+        success: true,
+        data: reservation,
+      });
+    } catch (error) {
+      // Handle rate limiting errors specifically
+      if (error instanceof Error && error.message.includes('Rate limit exceeded')) {
+        res.status(429).json({
+          success: false,
+          error: error.message,
+          message: 'Too many requests. Please wait a moment and try again.',
+        });
+        return;
+      }
+      throw error; // Re-throw to be handled by error middleware
+    }
   }
 
   async getByUser(req: AuthRequest, res: Response): Promise<void> {
@@ -47,11 +60,24 @@ export class ReservationController {
       return;
     }
 
-    const reservations = await this.reservationService.getReservationsByUser(req.user.userId);
-    res.json({
-      success: true,
-      data: reservations,
-    });
+    try {
+      const reservations = await this.reservationService.getReservationsByUser(req.user.userId);
+      res.json({
+        success: true,
+        data: reservations,
+      });
+    } catch (error) {
+      // Handle rate limiting errors specifically
+      if (error instanceof Error && error.message.includes('Rate limit exceeded')) {
+        res.status(429).json({
+          success: false,
+          error: error.message,
+          message: 'Too many requests. Please wait a moment and try again.',
+        });
+        return;
+      }
+      throw error; // Re-throw to be handled by error middleware
+    }
   }
 
   async update(req: Request, res: Response): Promise<void> {

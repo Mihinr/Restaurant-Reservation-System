@@ -7,6 +7,8 @@ import {
 } from '@restaurant-reservation/shared';
 import { NotFoundError, ConflictError, BadRequestError } from '../errors/AppError';
 import { generateReservationNumber } from '../utils/reservationNumber';
+import { getEnvConfig } from '../config/env';
+import axios from 'axios';
 
 export class ReservationService {
   private reservationRepository: ReservationRepository;
@@ -44,7 +46,8 @@ export class ReservationService {
       });
     });
 
-    return this.mapToReservationType(reservation);
+    const enriched = await this.enrichReservationsWithExternalData([reservation]);
+    return enriched[0];
   }
 
   async getReservationById(id: string): Promise<ReservationType> {
@@ -52,12 +55,13 @@ export class ReservationService {
     if (!reservation) {
       throw new NotFoundError('Reservation not found');
     }
-    return this.mapToReservationType(reservation);
+    const enriched = await this.enrichReservationsWithExternalData([reservation]);
+    return enriched[0];
   }
 
   async getReservationsByUser(userId: string): Promise<ReservationType[]> {
     const reservations = await this.reservationRepository.findByUserId(userId);
-    return reservations.map(this.mapToReservationType);
+    return await this.enrichReservationsWithExternalData(reservations);
   }
 
   async updateReservation(
@@ -71,7 +75,7 @@ export class ReservationService {
     }
 
     if (expectedVersion !== undefined && existing.version !== expectedVersion) {
-      throw new ConflictError('Reservation was modified by another user');
+      throw new ConflictError('This reservation was modified by another user. Please refresh the page and try again.');
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -93,7 +97,8 @@ export class ReservationService {
       return repo.update(id, data, expectedVersion);
     });
 
-    return this.mapToReservationType(updated);
+    const enriched = await this.enrichReservationsWithExternalData([updated]);
+    return enriched[0];
   }
 
   async cancelReservation(id: string): Promise<void> {
@@ -126,6 +131,166 @@ export class ReservationService {
       reservationTime,
       duration
     );
+  }
+
+  private async enrichReservationsWithExternalData(
+    reservations: Array<{
+      id: string;
+      reservationNumber: string;
+      userId: string;
+      restaurantId: string;
+      tableId: string | null;
+      partySize: number;
+      reservationDate: Date;
+      reservationTime: Date;
+      durationMinutes: number;
+      status: string;
+      statusUpdatedAt: Date;
+      customerName: string | null;
+      customerPhone: string | null;
+      specialRequests: string | null;
+      version: number;
+      createdAt: Date;
+      updatedAt: Date;
+    }>
+  ): Promise<ReservationType[]> {
+    const { TABLE_SERVICE_URL } = getEnvConfig();
+    
+    // Collect unique IDs
+    const uniqueRestaurantIds = [...new Set(reservations.map((r) => r.restaurantId))];
+    const uniqueTableIds = [...new Set(reservations.map((r) => r.tableId).filter((id): id is string => id !== null))];
+    
+    // Batch fetch restaurants and tables in parallel
+    let restaurantMap: Map<string, { name: string; city: string; state: string }>;
+    let tableMap: Map<string, { tableNumber: string }>;
+    
+    try {
+      [restaurantMap, tableMap] = await Promise.all([
+        this.batchFetchRestaurants(TABLE_SERVICE_URL, uniqueRestaurantIds),
+        this.batchFetchTables(TABLE_SERVICE_URL, uniqueTableIds),
+      ]);
+    } catch (error) {
+      // If rate limited, throw error to be handled by controller
+      if (error instanceof Error && error.message.includes('Rate limit exceeded')) {
+        throw error;
+      }
+      // For other errors, continue with empty maps (graceful degradation)
+      restaurantMap = new Map();
+      tableMap = new Map();
+    }
+    
+    // Map reservations with enriched data
+    return reservations.map((reservation) => {
+      const baseReservation = this.mapToReservationType(reservation);
+      
+      // Add restaurant details
+      const restaurant = restaurantMap.get(reservation.restaurantId);
+      if (restaurant) {
+        baseReservation.restaurantName = restaurant.name;
+        baseReservation.restaurantCity = restaurant.city;
+        baseReservation.restaurantState = restaurant.state;
+      }
+      
+      // Add table number
+      if (reservation.tableId) {
+        const table = tableMap.get(reservation.tableId);
+        if (table) {
+          baseReservation.tableNumber = table.tableNumber;
+        }
+      }
+      
+      return baseReservation;
+    });
+  }
+
+  private async batchFetchRestaurants(
+    tableServiceUrl: string,
+    restaurantIds: string[]
+  ): Promise<Map<string, { name: string; city: string; state: string }>> {
+    const restaurantMap = new Map<string, { name: string; city: string; state: string }>();
+    
+    if (restaurantIds.length === 0) {
+      return restaurantMap;
+    }
+    
+    try {
+      // Use batch endpoint - single request for all restaurants
+      const response = await axios.post<{ 
+        success: boolean; 
+        data: Array<{ id: string; name: string; city: string; state: string }> 
+      }>(
+        `${tableServiceUrl}/api/v1/restaurants/batch`,
+        { ids: restaurantIds },
+        { timeout: 5000 }
+      );
+      
+      if (response.data.success && response.data.data) {
+        response.data.data.forEach((restaurant) => {
+          restaurantMap.set(restaurant.id, {
+            name: restaurant.name,
+            city: restaurant.city,
+            state: restaurant.state,
+          });
+        });
+      }
+    } catch (error: unknown) {
+      // Handle rate limiting specifically
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const retryAfter = error.response.headers['retry-after'] || '15';
+        throw new Error(
+          `Rate limit exceeded when fetching restaurant details. Please try again in ${retryAfter} seconds.`
+        );
+      }
+      
+      // Log other errors but don't fail the entire request
+      console.warn('Failed to batch fetch restaurants:', error);
+    }
+    
+    return restaurantMap;
+  }
+
+  private async batchFetchTables(
+    tableServiceUrl: string,
+    tableIds: string[]
+  ): Promise<Map<string, { tableNumber: string }>> {
+    const tableMap = new Map<string, { tableNumber: string }>();
+    
+    if (tableIds.length === 0) {
+      return tableMap;
+    }
+    
+    try {
+      // Use batch endpoint - single request for all tables
+      const response = await axios.post<{ 
+        success: boolean; 
+        data: Array<{ id: string; tableNumber: string }> 
+      }>(
+        `${tableServiceUrl}/api/v1/tables/batch`,
+        { ids: tableIds },
+        { timeout: 5000 }
+      );
+      
+      if (response.data.success && response.data.data) {
+        response.data.data.forEach((table) => {
+          tableMap.set(table.id, {
+            tableNumber: table.tableNumber,
+          });
+        });
+      }
+    } catch (error: unknown) {
+      // Handle rate limiting specifically
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const retryAfter = error.response.headers['retry-after'] || '15';
+        throw new Error(
+          `Rate limit exceeded when fetching table details. Please try again in ${retryAfter} seconds.`
+        );
+      }
+      
+      // Log other errors but don't fail the entire request
+      console.warn('Failed to batch fetch tables:', error);
+    }
+    
+    return tableMap;
   }
 
   private mapToReservationType(reservation: {
