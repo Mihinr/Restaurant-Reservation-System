@@ -128,6 +128,29 @@ export const cancelReservation = createAsyncThunk(
   }
 );
 
+export const removeTableFromReservation = createAsyncThunk(
+  'reservation/removeTableFromReservation',
+  async ({ reservationId, tableId }: { reservationId: string; tableId: string }, { rejectWithValue }) => {
+    try {
+      const response = await reservationService.removeTableFromReservation(reservationId, tableId);
+      return response.data;
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
+        const errorMessage =
+          axiosError.response?.data?.message ||
+          axiosError.response?.data?.error ||
+          'Failed to remove table from reservation';
+        return rejectWithValue(errorMessage);
+      }
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue('Failed to remove table from reservation');
+    }
+  }
+);
+
 const reservationSlice = createSlice({
   name: 'reservation',
   initialState,

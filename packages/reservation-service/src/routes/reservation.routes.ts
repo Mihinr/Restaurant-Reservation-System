@@ -35,6 +35,10 @@ export function createReservationRoutes(prisma: PrismaClient): Router {
     reservationController.cancel(req, res).catch(next);
   });
 
+  router.delete('/:id/tables/:tableId', authenticate, (req, res, next) => {
+    reservationController.removeTable(req, res).catch(next);
+  });
+
   return router;
 }
 

@@ -10,8 +10,10 @@ export interface Reservation {
   restaurantName?: string;
   restaurantCity?: string;
   restaurantState?: string;
-  tableId?: string;
-  tableNumber?: string;
+  tableId?: string; // Deprecated: kept for backward compatibility
+  tableNumber?: string; // Deprecated: kept for backward compatibility
+  tableIds?: string[]; // New: array of table IDs
+  tableNumbers?: string[]; // New: array of table numbers
   partySize: number;
   reservationDate: Date;
   reservationTime: Date;
@@ -28,7 +30,8 @@ export interface Reservation {
 
 export interface CreateReservationDto {
   restaurantId: string;
-  tableId?: string;
+  tableId?: string; // Deprecated: use tableIds instead
+  tableIds?: string[]; // New: array of table IDs
   reservationDate: string;
   reservationTime: string;
   partySize: number;
@@ -38,7 +41,8 @@ export interface CreateReservationDto {
 }
 
 export interface UpdateReservationDto {
-  tableId?: string;
+  tableId?: string; // Deprecated: use tableIds instead
+  tableIds?: string[]; // New: array of table IDs (replaces all tables)
   reservationDate?: string;
   reservationTime?: string;
   partySize?: number;

@@ -18,7 +18,7 @@ export function SearchPage() {
   });
   const [filters, setFilters] = useState({ city: '', state: '' });
   const [dateError, setDateError] = useState<string | null>(null);
-  const [selectedTable, setSelectedTable] = useState<TableAvailability | null>(null);
+  const [selectedTables, setSelectedTables] = useState<TableAvailability[]>([]);
   const [reservationDetails, setReservationDetails] = useState({
     customerName: '',
     customerPhone: '',
@@ -56,7 +56,7 @@ export function SearchPage() {
     if (dateError) return;
     if (searchCriteria.restaurantId) {
       await dispatch(searchAvailability({ ...searchCriteria, restaurantId: searchCriteria.restaurantId }));
-      setSelectedTable(null);
+      setSelectedTables([]);
       setShowReservationForm(false);
     }
   };
@@ -77,18 +77,33 @@ export function SearchPage() {
   const uniqueStates = Array.from(new Set(restaurants.map((r) => r.state))).sort();
 
   const handleTableSelect = (table: TableAvailability) => {
-    setSelectedTable(table);
-    setShowReservationForm(true);
+    setSelectedTables(prev => {
+      const isSelected = prev.some(t => t.tableId === table.tableId);
+      if (isSelected) {
+        // Deselect
+        const newSelection = prev.filter(t => t.tableId !== table.tableId);
+        setShowReservationForm(newSelection.length > 0);
+        return newSelection;
+      } else {
+        // Select
+        const newSelection = [...prev, table];
+        setShowReservationForm(true);
+        return newSelection;
+      }
+    });
   };
 
   const handleCreateReservation = async (e: FormEvent) => {
     e.preventDefault();
-    if (!selectedTable || !searchCriteria.restaurantId) return;
+    if (selectedTables.length === 0 || !searchCriteria.restaurantId) {
+      toast.error('Please select at least one table');
+      return;
+    }
 
     const result = await dispatch(
       createReservation({
         restaurantId: searchCriteria.restaurantId,
-        tableId: selectedTable.tableId,
+        tableIds: selectedTables.map(t => t.tableId),
         reservationDate: searchCriteria.date,
         reservationTime: searchCriteria.time,
         partySize: searchCriteria.partySize,
@@ -223,39 +238,65 @@ export function SearchPage() {
       {availableTables.length > 0 && (
         <div>
           <h2 className="text-lg sm:text-xl font-bold mb-4">Available Tables</h2>
+          {selectedTables.length > 0 && (
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm font-medium text-blue-800">
+                {selectedTables.length} table{selectedTables.length > 1 ? 's' : ''} selected: {selectedTables.map(t => `Table ${t.tableNumber}`).join(', ')}
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Total Capacity: {selectedTables.reduce((sum, t) => sum + t.capacity, 0)} people
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {availableTables
               .filter((table) => table.available)
-              .map((table) => (
-                <div
-                  key={table.tableId}
-                  className={`bg-white p-4 rounded-lg shadow-md cursor-pointer transition-all ${
-                    selectedTable?.tableId === table.tableId
-                      ? 'ring-2 ring-blue-500 border-blue-500'
-                      : 'hover:shadow-lg'
-                  }`}
-                  onClick={() => handleTableSelect(table)}
-                >
-                  <h3 className="font-bold text-base sm:text-lg">Table {table.tableNumber}</h3>
-                  <p className="text-sm sm:text-base">Capacity: {table.capacity}</p>
-                  <p className="text-sm sm:text-base">Min Party: {table.minPartySize}</p>
-                  {selectedTable?.tableId === table.tableId && (
-                    <p className="text-sm text-blue-600 font-medium mt-2">Selected</p>
-                  )}
-                </div>
-              ))}
+              .map((table) => {
+                const isSelected = selectedTables.some(t => t.tableId === table.tableId);
+                return (
+                  <div
+                    key={table.tableId}
+                    className={`bg-white p-4 rounded-lg shadow-md cursor-pointer transition-all border-2 ${
+                      isSelected
+                        ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50'
+                        : 'border-transparent hover:shadow-lg hover:border-gray-300'
+                    }`}
+                    onClick={() => handleTableSelect(table)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleTableSelect(table)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <div className="flex-1">
+                        <h3 className="font-bold text-base sm:text-lg">Table {table.tableNumber}</h3>
+                        <p className="text-sm sm:text-base">Capacity: {table.capacity}</p>
+                        <p className="text-sm sm:text-base">Min Party: {table.minPartySize}</p>
+                        {isSelected && (
+                          <p className="text-sm text-blue-600 font-medium mt-2">✓ Selected</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
 
-      {showReservationForm && selectedTable && (
+      {showReservationForm && selectedTables.length > 0 && (
         <div className="mt-6 bg-white p-4 sm:p-6 rounded-lg shadow-md">
           <h2 className="text-lg sm:text-xl font-bold mb-4">Complete Your Reservation</h2>
           <form onSubmit={handleCreateReservation}>
             <div className="mb-4 p-3 bg-gray-50 rounded">
+              <p className="text-sm text-gray-600 mb-2">
+                <strong>Tables:</strong> {selectedTables.map(t => `Table ${t.tableNumber}`).join(', ')}
+              </p>
               <p className="text-sm text-gray-600">
-                <strong>Table:</strong> {selectedTable.tableNumber} | <strong>Date:</strong>{' '}
-                {format(new Date(searchCriteria.date), 'MMM dd, yyyy')} | <strong>Time:</strong>{' '}
+                <strong>Date:</strong> {format(new Date(searchCriteria.date), 'MMM dd, yyyy')} | <strong>Time:</strong>{' '}
                 {searchCriteria.time} | <strong>Party Size:</strong> {searchCriteria.partySize}
               </p>
             </div>

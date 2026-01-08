@@ -59,7 +59,10 @@ export class RestaurantController {
 
   async getBatch(req: Request, res: Response): Promise<void> {
     const { ids } = req.body;
-    const restaurants = await this.restaurantService.getRestaurantsByIds(ids);
+    const restaurantIds = Array.isArray(ids) 
+      ? ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : [];
+    const restaurants = await this.restaurantService.getRestaurantsByIds(restaurantIds);
     res.json({
       success: true,
       data: restaurants,

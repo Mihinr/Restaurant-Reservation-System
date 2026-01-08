@@ -23,7 +23,10 @@ export class ReservationService {
       throw new BadRequestError('Party size must be at least 1');
     }
 
-    if (data.tableId) {
+    // Get tableIds from either tableIds array or legacy tableId field
+    const tableIds = data.tableIds || (data.tableId ? [data.tableId] : []);
+
+    if (tableIds.length > 0) {
       // Check for conflicting reservations (active ones only)
       const reservationDate = new Date(data.reservationDate);
       const [hours, minutes] = data.reservationTime.split(':').map(Number);
@@ -31,14 +34,14 @@ export class ReservationService {
       reservationTime.setHours(hours, minutes, 0, 0);
       
       const conflicting = await this.reservationRepository.findConflictingReservations(
-        data.tableId,
+        tableIds,
         reservationDate,
         reservationTime,
         90
       );
 
       if (conflicting.length > 0) {
-        throw new ConflictError('This table is already reserved for the selected date and time');
+        throw new ConflictError('One or more tables are already reserved for the selected date and time');
       }
     }
 
@@ -47,6 +50,54 @@ export class ReservationService {
     try {
       const reservation = await this.prisma.$transaction(async (tx) => {
         const repo = new ReservationRepository(tx as unknown as PrismaClient);
+        
+        // Before creating, check if there are cancelled reservations at these exact time slots
+        // and delete them to free up the slots
+        if (tableIds.length > 0) {
+          const reservationDate = new Date(data.reservationDate);
+          const [hours, minutes] = data.reservationTime.split(':').map(Number);
+          const reservationTime = new Date();
+          reservationTime.setHours(hours, minutes, 0, 0);
+          
+          // Find any cancelled reservations at these exact time slots
+          // Check both legacy tableId and new tables relation
+          const cancelledReservations = await tx.reservation.findMany({
+            where: {
+              reservationDate: reservationDate,
+              reservationTime: reservationTime,
+              status: 'CANCELLED',
+              OR: [
+                { tableId: { in: tableIds } },
+                {
+                  tables: {
+                    some: {
+                      tableId: { in: tableIds },
+                    },
+                  },
+                },
+              ],
+            },
+            include: {
+              tables: true,
+            },
+          });
+          
+          // Delete cancelled reservations that conflict with our tables
+          for (const cancelledReservation of cancelledReservations) {
+            const cancelledTableIds = [
+              ...(cancelledReservation.tableId ? [cancelledReservation.tableId] : []),
+              ...cancelledReservation.tables.map(rt => rt.tableId),
+            ];
+            
+            // If all tables in the cancelled reservation are in our tableIds, delete it
+            if (cancelledTableIds.every(id => tableIds.includes(id))) {
+              await tx.reservation.delete({
+                where: { id: cancelledReservation.id },
+              });
+            }
+          }
+        }
+        
         return repo.create({
           ...data,
           userId,
@@ -57,15 +108,11 @@ export class ReservationService {
       const enriched = await this.enrichReservationsWithExternalData([reservation]);
       return enriched[0];
     } catch (error) {
-      // Handle Prisma unique constraint errors
+      // Handle Prisma unique constraint errors (though we shouldn't hit this with the new schema)
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
           const target = error.meta?.target as string[] | undefined;
-          if (target && target.includes('table_id') && target.includes('reservation_date') && target.includes('reservation_time')) {
-            throw new ConflictError('This table is already reserved for the selected date and time');
-          }
           if (target && target.includes('reservationNumber')) {
-            // This should be extremely rare, but handle it
             throw new ConflictError('A reservation with this number already exists. Please try again.');
           }
         }
@@ -108,25 +155,67 @@ export class ReservationService {
       throw new ConflictError('This reservation was modified by another user. Please refresh the page and try again.');
     }
 
+    // Get tableIds from either tableIds array or legacy tableId field
+    const tableIds = data.tableIds || (data.tableId ? [data.tableId] : undefined);
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const repo = new ReservationRepository(tx as unknown as PrismaClient);
 
-      if (data.tableId && data.reservationDate && data.reservationTime) {
+      // Check for conflicts if tables or time are being updated
+      if (tableIds && tableIds.length > 0 && (data.reservationDate || data.reservationTime)) {
+        const reservationDate = data.reservationDate ? new Date(data.reservationDate) : existing.reservationDate;
+        const reservationTime = data.reservationTime 
+          ? (() => {
+              const [hours, minutes] = data.reservationTime.split(':').map(Number);
+              const time = new Date();
+              time.setHours(hours, minutes, 0, 0);
+              return time;
+            })()
+          : existing.reservationTime;
+
         const conflicting = await repo.findConflictingReservations(
-          data.tableId,
-          new Date(data.reservationDate),
-          new Date(`2000-01-01T${data.reservationTime}:00`),
+          tableIds,
+          reservationDate,
+          reservationTime,
           90
         );
 
-        if (conflicting.length > 0 && conflicting[0]?.id !== id) {
-          throw new ConflictError('Table is already reserved for this time slot');
+        // Filter out the current reservation from conflicts
+        const otherConflicts = conflicting.filter(c => c.id !== id);
+        if (otherConflicts.length > 0) {
+          throw new ConflictError('One or more tables are already reserved for the selected date and time');
         }
       }
 
       return repo.update(id, data, expectedVersion);
     });
 
+    const enriched = await this.enrichReservationsWithExternalData([updated]);
+    return enriched[0];
+  }
+
+  async removeTableFromReservation(reservationId: string, tableId: string): Promise<ReservationType> {
+    const reservation = await this.reservationRepository.findById(reservationId);
+    if (!reservation) {
+      throw new NotFoundError('Reservation not found');
+    }
+
+    // Check if the table exists in this reservation
+    const tableIds = [
+      ...(reservation.tableId ? [reservation.tableId] : []),
+      ...reservation.tables.map(rt => rt.tableId),
+    ];
+
+    if (!tableIds.includes(tableId)) {
+      throw new NotFoundError('Table not found in this reservation');
+    }
+
+    // If this is the only table, don't allow removal (should cancel the reservation instead)
+    if (tableIds.length === 1) {
+      throw new BadRequestError('Cannot remove the only table from a reservation. Please cancel the reservation instead.');
+    }
+
+    const updated = await this.reservationRepository.removeTableFromReservation(reservationId, tableId);
     const enriched = await this.enrichReservationsWithExternalData([updated]);
     return enriched[0];
   }
@@ -182,13 +271,22 @@ export class ReservationService {
       version: number;
       createdAt: Date;
       updatedAt: Date;
+      tables?: Array<{ tableId: string }>;
     }>
   ): Promise<ReservationType[]> {
     const { TABLE_SERVICE_URL } = getEnvConfig();
     
     // Collect unique IDs
     const uniqueRestaurantIds = [...new Set(reservations.map((r) => r.restaurantId))];
-    const uniqueTableIds = [...new Set(reservations.map((r) => r.tableId).filter((id): id is string => id !== null))];
+    
+    // Collect table IDs from both legacy tableId and new tables relation
+    const uniqueTableIds = new Set<string>();
+    reservations.forEach((r) => {
+      if (r.tableId) uniqueTableIds.add(r.tableId);
+      if (r.tables) {
+        r.tables.forEach(rt => uniqueTableIds.add(rt.tableId));
+      }
+    });
     
     // Batch fetch restaurants and tables in parallel
     let restaurantMap: Map<string, { name: string; city: string; state: string }>;
@@ -197,7 +295,7 @@ export class ReservationService {
     try {
       [restaurantMap, tableMap] = await Promise.all([
         this.batchFetchRestaurants(TABLE_SERVICE_URL, uniqueRestaurantIds),
-        this.batchFetchTables(TABLE_SERVICE_URL, uniqueTableIds),
+        this.batchFetchTables(TABLE_SERVICE_URL, Array.from(uniqueTableIds)),
       ]);
     } catch (error) {
       // If rate limited, throw error to be handled by controller
@@ -226,12 +324,40 @@ export class ReservationService {
         baseReservation.restaurantState = restaurant.state;
       }
       
-      // Add table number
+      // Collect all table IDs for this reservation
+      const tableIds: string[] = [];
       if (reservation.tableId) {
-        const table = tableMap.get(reservation.tableId);
+        tableIds.push(reservation.tableId);
+      }
+      if (reservation.tables) {
+        reservation.tables.forEach(rt => {
+          if (!tableIds.includes(rt.tableId)) {
+            tableIds.push(rt.tableId);
+          }
+        });
+      }
+      
+      // Add table numbers
+      const tableNumbers: string[] = [];
+      tableIds.forEach(tableId => {
+        const table = tableMap.get(tableId);
         if (table) {
-          baseReservation.tableNumber = table.tableNumber;
+          tableNumbers.push(table.tableNumber);
         }
+      });
+      
+      // Set tableIds and tableNumbers arrays
+      baseReservation.tableIds = tableIds.length > 0 ? tableIds : undefined;
+      baseReservation.tableNumbers = tableNumbers.length > 0 ? tableNumbers : undefined;
+      
+      // Keep backward compatibility: set single tableId and tableNumber
+      if (tableIds.length === 1) {
+        baseReservation.tableId = tableIds[0];
+        baseReservation.tableNumber = tableNumbers[0];
+      } else if (tableIds.length > 1) {
+        // Multiple tables: don't set single tableId/tableNumber
+        baseReservation.tableId = undefined;
+        baseReservation.tableNumber = undefined;
       }
       
       return baseReservation;

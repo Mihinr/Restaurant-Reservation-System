@@ -73,5 +73,12 @@ export const reservationService = {
   async cancelReservation(id: string): Promise<void> {
     await reservationApi.delete(`/api/v1/reservations/${id}`);
   },
+
+  async removeTableFromReservation(reservationId: string, tableId: string): Promise<{ data: Reservation }> {
+    const response = await reservationApi.delete<{ success: boolean; data: Reservation }>(
+      `/api/v1/reservations/${reservationId}/tables/${tableId}`
+    );
+    return { data: response.data.data };
+  },
 };
 

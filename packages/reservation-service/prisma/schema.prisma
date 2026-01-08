@@ -13,14 +13,14 @@ model Reservation {
   reservationNumber   String   @unique @db.VarChar(20)
   userId              String   @map("user_id")
   restaurantId        String   @map("restaurant_id")
-  tableId             String?  @map("table_id")
+  tableId             String?  @map("table_id") // Deprecated: kept for backward compatibility, use tables relation instead
   
   partySize           Int      @map("party_size")
   reservationDate     DateTime @map("reservation_date") @db.Date
   reservationTime     DateTime @map("reservation_time") @db.Time
   durationMinutes     Int      @default(90) @map("duration_minutes")
   
-  status              ReservationStatus @default(PENDING)
+  status              ReservationStatus @default(CONFIRMED)
   statusUpdatedAt     DateTime @default(now()) @map("status_updated_at")
   
   customerName        String?  @map("customer_name") @db.VarChar(255)
@@ -33,6 +33,8 @@ model Reservation {
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
   
+  tables              ReservationTable[]
+  
   @@map("reservations")
   @@index([userId])
   @@index([restaurantId])
@@ -40,7 +42,22 @@ model Reservation {
   @@index([status])
   @@index([reservationDate, reservationTime])
   @@index([restaurantId, reservationDate, reservationTime])
-  @@unique([tableId, reservationDate, reservationTime], name: "idx_table_timeslot")
+  // Removed unique constraint on tableId - now handled via ReservationTable
+}
+
+model ReservationTable {
+  id            String   @id @default(uuid())
+  reservationId String   @map("reservation_id")
+  tableId       String   @map("table_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  
+  @@unique([reservationId, tableId])
+  @@index([reservationId])
+  @@index([tableId])
+  @@index([reservationId, tableId])
+  @@map("reservation_tables")
 }
 
 model WaitlistEntry {

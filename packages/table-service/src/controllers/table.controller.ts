@@ -97,7 +97,10 @@ export class TableController {
 
   async getBatch(req: Request, res: Response): Promise<void> {
     const { ids } = req.body;
-    const tables = await this.tableService.getTablesByIds(ids);
+    const tableIds = Array.isArray(ids) 
+      ? ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+      : [];
+    const tables = await this.tableService.getTablesByIds(tableIds);
     res.json({
       success: true,
       data: tables,

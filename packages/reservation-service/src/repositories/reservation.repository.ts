@@ -17,12 +17,15 @@ export class ReservationRepository {
     const reservationTime = new Date();
     reservationTime.setHours(hours, minutes, 0, 0);
 
+    // Get tableIds from either tableIds array or legacy tableId field
+    const tableIds = data.tableIds || (data.tableId ? [data.tableId] : []);
+
     return this.prisma.reservation.create({
       data: {
         reservationNumber: data.reservationNumber,
         userId: data.userId,
         restaurantId: data.restaurantId,
-        tableId: data.tableId,
+        tableId: tableIds.length === 1 ? tableIds[0] : null, // Keep for backward compatibility
         partySize: data.partySize,
         reservationDate,
         reservationTime,
@@ -30,7 +33,15 @@ export class ReservationRepository {
         customerName: data.customerName,
         customerPhone: data.customerPhone,
         specialRequests: data.specialRequests,
-        status: 'PENDING',
+        status: 'CONFIRMED',
+        tables: {
+          create: tableIds.map(tableId => ({
+            tableId: tableId,
+          })),
+        },
+      },
+      include: {
+        tables: true,
       },
     });
   }
@@ -38,18 +49,27 @@ export class ReservationRepository {
   async findById(id: string): Promise<Reservation | null> {
     return this.prisma.reservation.findUnique({
       where: { id },
+      include: {
+        tables: true,
+      },
     });
   }
 
   async findByUserId(userId: string): Promise<Reservation[]> {
     return this.prisma.reservation.findMany({
       where: { userId },
+      include: {
+        tables: true,
+      },
       orderBy: [{ reservationDate: 'desc' }, { reservationTime: 'desc' }],
     });
   }
 
   async findAll(): Promise<Reservation[]> {
     return this.prisma.reservation.findMany({
+      include: {
+        tables: true,
+      },
       orderBy: [{ reservationDate: 'desc' }, { reservationTime: 'desc' }],
     });
   }
@@ -57,12 +77,15 @@ export class ReservationRepository {
   async findByRestaurant(restaurantId: string): Promise<Reservation[]> {
     return this.prisma.reservation.findMany({
       where: { restaurantId },
+      include: {
+        tables: true,
+      },
       orderBy: [{ reservationDate: 'asc' }, { reservationTime: 'asc' }],
     });
   }
 
   async findConflictingReservations(
-    tableId: string,
+    tableIds: string[],
     date: Date,
     time: Date,
     duration: number
@@ -72,36 +95,60 @@ export class ReservationRepository {
 
     return this.prisma.reservation.findMany({
       where: {
-        tableId,
         reservationDate: date,
         status: {
           in: ['PENDING', 'CONFIRMED', 'SEATED'],
         },
-        OR: [
+        AND: [
           {
-            reservationTime: {
-              lte: time,
-            },
-            AND: {
-              reservationTime: {
-                gte: new Date(time.getTime() - duration * 60 * 1000),
+            OR: [
+              // Check legacy tableId field
+              ...(tableIds.map(tableId => ({
+                tableId: tableId,
+              }))),
+              // Check new tables relation
+              {
+                tables: {
+                  some: {
+                    tableId: {
+                      in: tableIds,
+                    },
+                  },
+                },
               },
-            },
+            ],
           },
           {
-            reservationTime: {
-              gte: time,
-              lt: endTime,
-            },
+            OR: [
+              {
+                reservationTime: {
+                  lte: time,
+                },
+                AND: {
+                  reservationTime: {
+                    gte: new Date(time.getTime() - duration * 60 * 1000),
+                  },
+                },
+              },
+              {
+                reservationTime: {
+                  gte: time,
+                  lt: endTime,
+                },
+              },
+            ],
           },
         ],
+      },
+      include: {
+        tables: true,
       },
     });
   }
 
   async update(id: string, data: UpdateReservationDto, expectedVersion?: number): Promise<Reservation> {
     const updateData: {
-      tableId?: string;
+      tableId?: string | null;
       partySize?: number;
       reservationDate?: Date;
       reservationTime?: Date;
@@ -111,7 +158,42 @@ export class ReservationRepository {
       version?: { increment: number };
     } = {};
 
-    if (data.tableId !== undefined) updateData.tableId = data.tableId;
+    // Handle tableIds update - replace all tables
+    if (data.tableIds !== undefined) {
+      // Delete existing table relationships
+      await this.prisma.reservationTable.deleteMany({
+        where: { reservationId: id },
+      });
+
+      // Create new table relationships
+      if (data.tableIds.length > 0) {
+        await this.prisma.reservationTable.createMany({
+          data: data.tableIds.map(tableId => ({
+            reservationId: id,
+            tableId: tableId,
+          })),
+        });
+      }
+
+      // Update legacy tableId field for backward compatibility
+      updateData.tableId = data.tableIds.length === 1 ? data.tableIds[0] : null;
+    } else if (data.tableId !== undefined) {
+      // Legacy support: single tableId
+      updateData.tableId = data.tableId;
+      // Also update the tables relation
+      await this.prisma.reservationTable.deleteMany({
+        where: { reservationId: id },
+      });
+      if (data.tableId) {
+        await this.prisma.reservationTable.create({
+          data: {
+            reservationId: id,
+            tableId: data.tableId,
+          },
+        });
+      }
+    }
+
     if (data.partySize !== undefined) updateData.partySize = data.partySize;
     if (data.reservationDate) {
       updateData.reservationDate = new Date(data.reservationDate);
@@ -136,6 +218,9 @@ export class ReservationRepository {
         ...(expectedVersion !== undefined && { version: expectedVersion }),
       },
       data: updateData,
+      include: {
+        tables: true,
+      },
     });
   }
 
@@ -159,6 +244,43 @@ export class ReservationRepository {
     });
   }
 
+  async removeTableFromReservation(reservationId: string, tableId: string): Promise<Reservation> {
+    // Remove the table from the reservation
+    await this.prisma.reservationTable.deleteMany({
+      where: {
+        reservationId: reservationId,
+        tableId: tableId,
+      },
+    });
+
+    // Update legacy tableId field if it matches
+    const reservation = await this.prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: { tables: true },
+    });
+
+    if (reservation) {
+      const remainingTables = reservation.tables;
+      const updateData: { tableId?: string | null } = {};
+
+      if (remainingTables.length === 0) {
+        updateData.tableId = null;
+      } else if (remainingTables.length === 1) {
+        updateData.tableId = remainingTables[0].tableId;
+      } else {
+        updateData.tableId = null; // Multiple tables, can't use legacy field
+      }
+
+      return this.prisma.reservation.update({
+        where: { id: reservationId },
+        data: updateData,
+        include: { tables: true },
+      });
+    }
+
+    throw new Error('Reservation not found');
+  }
+
   async findReservedTableIds(
     restaurantId: string,
     date: Date,
@@ -174,9 +296,6 @@ export class ReservationRepository {
         reservationDate: date,
         status: {
           in: ['PENDING', 'CONFIRMED', 'SEATED'],
-        },
-        tableId: {
-          not: null,
         },
         OR: [
           {
@@ -197,12 +316,25 @@ export class ReservationRepository {
           },
         ],
       },
-      select: {
-        tableId: true,
+      include: {
+        tables: true,
       },
     });
 
-    return reservations.map((r) => r.tableId!).filter((id): id is string => id !== null);
+    // Collect table IDs from both legacy tableId field and new tables relation
+    const tableIds = new Set<string>();
+    reservations.forEach(reservation => {
+      // Legacy tableId
+      if (reservation.tableId) {
+        tableIds.add(reservation.tableId);
+      }
+      // New tables relation
+      reservation.tables.forEach(rt => {
+        tableIds.add(rt.tableId);
+      });
+    });
+
+    return Array.from(tableIds);
   }
 }
 

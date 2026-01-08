@@ -312,6 +312,7 @@ export function StaffDashboardPage() {
                           <p className="text-xs sm:text-sm text-gray-600">
                             {format(new Date(reservation.reservationTime), 'HH:mm')} • Party of{' '}
                             {reservation.partySize}
+                            {reservation.tableNumber && ` • Table ${reservation.tableNumber}`}
                           </p>
                           {reservation.customerName && (
                             <p className="text-xs sm:text-sm text-gray-600">

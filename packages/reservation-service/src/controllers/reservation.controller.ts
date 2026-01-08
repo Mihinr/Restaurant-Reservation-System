@@ -142,5 +142,24 @@ export class ReservationController {
       data: tableIds,
     });
   }
+
+  async removeTable(req: Request, res: Response): Promise<void> {
+    const { id, tableId } = req.params;
+
+    if (!tableId) {
+      res.status(400).json({
+        success: false,
+        error: 'Table ID is required',
+      });
+      return;
+    }
+
+    const reservation = await this.reservationService.removeTableFromReservation(id, tableId);
+    res.json({
+      success: true,
+      data: reservation,
+      message: 'Table removed from reservation successfully',
+    });
+  }
 }
 
