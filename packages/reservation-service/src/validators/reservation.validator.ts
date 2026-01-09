@@ -8,8 +8,8 @@ const baseReservationSchemaObject = z.object({
   reservationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (YYYY-MM-DD)'),
   reservationTime: z.string().regex(/^([0-1][0-9]|2[0-3]):[0-5][0-9]$/, 'Invalid time format (HH:MM)'),
   partySize: z.number().int().positive('Party size must be a positive integer'),
-  customerName: z.string().max(255).optional(),
-  customerPhone: z.string().regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format').optional(),
+  customerName: z.string().min(1, 'Customer name is required').max(255, 'Customer name must be less than 255 characters'),
+  customerPhone: z.string().regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format').min(1, 'Customer phone is required'),
   specialRequests: z.string().max(1000).optional(),
 });
 
@@ -21,14 +21,13 @@ const baseReservationSchema = baseReservationSchemaObject.refine(
   }
 );
 
-// Preprocess the entire object to convert empty strings to undefined for optional fields
+// Preprocess the entire object to convert empty strings to undefined for optional fields only
 const preprocessEmptyStrings = z.preprocess(
   (data) => {
     if (typeof data !== 'object' || data === null) return data;
     const processed = { ...data };
-    // Convert empty strings to undefined for optional fields
-    if (processed.customerName === '') processed.customerName = undefined;
-    if (processed.customerPhone === '') processed.customerPhone = undefined;
+    // Convert empty strings to undefined for optional fields only
+    // customerName and customerPhone are required, so don't convert them
     if (processed.specialRequests === '') processed.specialRequests = undefined;
     if (processed.tableId === '') processed.tableId = undefined;
     return processed;

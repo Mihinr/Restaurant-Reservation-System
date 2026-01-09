@@ -29,5 +29,16 @@ export const restaurantService = {
     );
     return { data: response.data.data };
   },
+
+  async getTablesByIds(tableIds: string[]): Promise<{ data: Array<{ id: string; capacity: number; minPartySize: number }> }> {
+    if (tableIds.length === 0) {
+      return { data: [] };
+    }
+    const response = await axios.post<{ success: boolean; data: Array<{ id: string; capacity: number; minPartySize: number }> }>(
+      `${TABLE_SERVICE_URL}/api/v1/tables/batch`,
+      { ids: tableIds }
+    );
+    return { data: response.data.data };
+  },
 };
 

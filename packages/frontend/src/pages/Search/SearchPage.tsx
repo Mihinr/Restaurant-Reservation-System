@@ -100,6 +100,16 @@ export function SearchPage() {
       return;
     }
 
+    if (!reservationDetails.customerName || reservationDetails.customerName.trim() === '') {
+      toast.error('Customer name is required');
+      return;
+    }
+
+    if (!reservationDetails.customerPhone || reservationDetails.customerPhone.trim() === '') {
+      toast.error('Customer phone is required');
+      return;
+    }
+
     const result = await dispatch(
       createReservation({
         restaurantId: searchCriteria.restaurantId,
@@ -107,8 +117,8 @@ export function SearchPage() {
         reservationDate: searchCriteria.date,
         reservationTime: searchCriteria.time,
         partySize: searchCriteria.partySize,
-        customerName: reservationDetails.customerName || undefined,
-        customerPhone: reservationDetails.customerPhone || undefined,
+        customerName: reservationDetails.customerName.trim(),
+        customerPhone: reservationDetails.customerPhone.trim(),
         specialRequests: reservationDetails.specialRequests || undefined,
       })
     );
@@ -301,18 +311,20 @@ export function SearchPage() {
               </p>
             </div>
             <Input
-              label="Customer Name (optional)"
+              label="Customer Name"
               value={reservationDetails.customerName}
               onChange={(e) =>
                 setReservationDetails({ ...reservationDetails, customerName: e.target.value })
               }
+              required
             />
             <Input
-              label="Customer Phone (optional)"
+              label="Customer Phone"
               value={reservationDetails.customerPhone}
               onChange={(e) =>
                 setReservationDetails({ ...reservationDetails, customerPhone: e.target.value })
               }
+              required
             />
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -11,6 +11,7 @@ import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { format } from 'date-fns';
 import { Reservation } from '@restaurant-reservation/shared';
+import { restaurantService } from '../../services/restaurantService';
 
 type TabType = 'current' | 'past';
 
@@ -82,6 +83,95 @@ export function ReservationPage() {
     e.preventDefault();
     if (!editingReservation) return;
 
+    // Validate required fields
+    if (!editForm.customerName || editForm.customerName.trim() === '') {
+      toast.error('Customer name is required');
+      return;
+    }
+
+    if (!editForm.customerPhone || editForm.customerPhone.trim() === '') {
+      toast.error('Customer phone is required');
+      return;
+    }
+
+    // Validate date is not in the past
+    const selectedDate = new Date(editForm.reservationDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+      toast.error('Reservation date cannot be in the past');
+      return;
+    }
+
+    // Validate party size against table capacity
+    const tableIds =
+      (editingReservation as any).tableIds ||
+      (editingReservation.tableId ? [editingReservation.tableId] : []);
+    if (tableIds.length > 0) {
+      try {
+        const tablesResponse = await restaurantService.getTablesByIds(tableIds);
+        const tables = tablesResponse.data;
+        const totalCapacity = tables.reduce(
+          (sum: number, table: { capacity: number }) => sum + table.capacity,
+          0
+        );
+
+        if (editForm.partySize > totalCapacity) {
+          toast.error(
+            `Party size (${editForm.partySize}) exceeds total table capacity (${totalCapacity})`
+          );
+          return;
+        }
+      } catch (error) {
+        // If we can't fetch table info, continue with update (backend will validate)
+        console.warn('Could not fetch table capacity information:', error);
+      }
+    }
+
+    // Check for date/time conflicts with other reservations
+    const hasDateChange =
+      editForm.reservationDate !==
+      format(new Date(editingReservation.reservationDate), 'yyyy-MM-dd');
+    const hasTimeChange =
+      editForm.reservationTime !== format(new Date(editingReservation.reservationTime), 'HH:mm');
+
+    if (hasDateChange || hasTimeChange) {
+      // Check if the new date/time conflicts with other reservations
+      const conflictingReservation = reservations.find(res => {
+        // Skip the current reservation
+        if (res.id === editingReservation.id) return false;
+
+        // Check if same restaurant
+        if (res.restaurantId !== editingReservation.restaurantId) return false;
+
+        // Check if same date
+        const resDate = format(new Date(res.reservationDate), 'yyyy-MM-dd');
+        if (resDate !== editForm.reservationDate) return false;
+
+        // Check if same time
+        const resTime = format(new Date(res.reservationTime), 'HH:mm');
+        if (resTime !== editForm.reservationTime) return false;
+
+        // Check if reservation is active (not cancelled or completed)
+        if (res.status === 'CANCELLED' || res.status === 'COMPLETED') return false;
+
+        // Check if tables overlap
+        const resTableIds = (res as any).tableIds || (res.tableId ? [res.tableId] : []);
+        const hasTableOverlap = tableIds.some((id: string) => resTableIds.includes(id));
+
+        return hasTableOverlap;
+      });
+
+      if (conflictingReservation) {
+        toast.error(
+          'This date and time conflicts with another reservation. Please choose a different date or time.'
+        );
+        return;
+      }
+    }
+
     const result = await dispatch(
       updateReservation({
         id: editingReservation.id,
@@ -89,9 +179,9 @@ export function ReservationPage() {
           reservationDate: editForm.reservationDate,
           reservationTime: editForm.reservationTime,
           partySize: editForm.partySize,
-          customerName: editForm.customerName || undefined,
-          customerPhone: editForm.customerPhone || undefined,
-          specialRequests: editForm.specialRequests || undefined,
+          customerName: editForm.customerName.trim(),
+          customerPhone: editForm.customerPhone.trim(),
+          ...(editForm.specialRequests ? { specialRequests: editForm.specialRequests } : {}),
           version: editingReservation.version,
         },
       })
@@ -395,11 +485,13 @@ export function ReservationPage() {
                       label="Customer Name"
                       value={editForm.customerName}
                       onChange={e => setEditForm({ ...editForm, customerName: e.target.value })}
+                      required
                     />
                     <Input
                       label="Customer Phone"
                       value={editForm.customerPhone}
                       onChange={e => setEditForm({ ...editForm, customerPhone: e.target.value })}
+                      required
                     />
                   </div>
                   <div className="mb-4">
@@ -463,48 +555,53 @@ export function ReservationPage() {
                       <span className="text-gray-600 font-medium">Party Size:</span>{' '}
                       <span className="text-gray-900">{reservation.partySize}</span>
                     </div>
-                    {(reservation.tableNumbers && reservation.tableNumbers.length > 0) ||
+                    {((reservation as any).tableNumbers &&
+                      (reservation as any).tableNumbers.length > 0) ||
                     reservation.tableNumber ? (
                       <div className="sm:col-span-2">
                         <span className="text-gray-600 font-medium">
                           Table
-                          {reservation.tableNumbers && reservation.tableNumbers.length > 1
+                          {(reservation as any).tableNumbers &&
+                          (reservation as any).tableNumbers.length > 1
                             ? 's'
                             : ''}
                           :
                         </span>{' '}
                         <div className="flex flex-wrap gap-2 mt-1">
-                          {reservation.tableNumbers && reservation.tableNumbers.length > 0 ? (
-                            reservation.tableNumbers.map((tableNum, index) => {
-                              const tableId = reservation.tableIds?.[index];
-                              const isPast = pastReservations.some(r => r.id === reservation.id);
-                              const canRemove =
-                                !isPast &&
-                                reservation.status !== 'CANCELLED' &&
-                                reservation.status !== 'COMPLETED' &&
-                                reservation.tableNumbers &&
-                                reservation.tableNumbers.length > 1;
+                          {(reservation as any).tableNumbers &&
+                          (reservation as any).tableNumbers.length > 0 ? (
+                            (reservation as any).tableNumbers.map(
+                              (tableNum: string, index: number) => {
+                                const tableId = (reservation as any).tableIds?.[index];
+                                const isPast = pastReservations.some(r => r.id === reservation.id);
+                                const canRemove =
+                                  !isPast &&
+                                  reservation.status !== 'CANCELLED' &&
+                                  reservation.status !== 'COMPLETED' &&
+                                  (reservation as any).tableNumbers &&
+                                  (reservation as any).tableNumbers.length > 1;
 
-                              return (
-                                <span
-                                  key={tableNum}
-                                  className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium"
-                                >
-                                  Table {tableNum}
-                                  {canRemove && tableId && (
-                                    <button
-                                      onClick={() =>
-                                        handleRemoveTable(reservation.id, tableId, tableNum)
-                                      }
-                                      className="ml-1 text-red-600 hover:text-red-800 font-bold"
-                                      title="Remove this table"
-                                    >
-                                      ×
-                                    </button>
-                                  )}
-                                </span>
-                              );
-                            })
+                                return (
+                                  <span
+                                    key={tableNum}
+                                    className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm font-medium"
+                                  >
+                                    Table {tableNum}
+                                    {canRemove && tableId && (
+                                      <button
+                                        onClick={() =>
+                                          handleRemoveTable(reservation.id, tableId, tableNum)
+                                        }
+                                        className="ml-1 text-red-600 hover:text-red-800 font-bold"
+                                        title="Remove this table"
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  </span>
+                                );
+                              }
+                            )
                           ) : (
                             <span className="text-gray-900">{reservation.tableNumber}</span>
                           )}
