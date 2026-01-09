@@ -117,7 +117,9 @@ export class TableService {
     }
 
     // Validate restaurant hours
-    const [timeHours, timeMinutes] = time.split(':').map(Number);
+    const timeParts = time.split(':').map(Number);
+    const timeHours = timeParts[0] ?? 0;
+    const timeMinutes = timeParts[1] ?? 0;
     const reservationTime = timeHours * 60 + timeMinutes; // minutes since midnight
 
     // Extract hours and minutes from opening/closing times

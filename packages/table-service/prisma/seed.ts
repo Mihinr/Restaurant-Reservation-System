@@ -9,7 +9,7 @@ async function main() {
   const createTime = (timeString: string): Date => {
     const [hours, minutes, seconds = '00'] = timeString.split(':');
     const date = new Date('1970-01-01T00:00:00Z');
-    date.setUTCHours(parseInt(hours, 10), parseInt(minutes, 10), parseInt(seconds, 10));
+    date.setUTCHours(parseInt(hours ?? '0', 10), parseInt(minutes ?? '0', 10), parseInt(seconds, 10));
     return date;
   };
 

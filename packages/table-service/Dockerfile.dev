@@ -1,0 +1,38 @@
+# Development Dockerfile for Table Service
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install tsx globally for hot reload
+RUN npm install -g tsx
+
+# Copy root package files
+COPY package.json package-lock.json ./
+COPY tsconfig.base.json ./
+
+# Copy shared package
+COPY packages/shared/package.json packages/shared/
+COPY packages/shared/tsconfig.json packages/shared/
+COPY packages/shared/src packages/shared/src
+
+# Copy table-service package files
+COPY packages/table-service/package.json packages/table-service/
+COPY packages/table-service/tsconfig.json packages/table-service/
+
+# Install all dependencies (including dev)
+WORKDIR /app
+RUN npm ci
+
+# Build shared package
+WORKDIR /app/packages/shared
+RUN npm run build
+
+# Generate Prisma client
+WORKDIR /app/packages/table-service
+RUN npx prisma generate
+
+WORKDIR /app/packages/table-service
+
+EXPOSE 3003
+
+CMD ["npm", "run", "dev"]

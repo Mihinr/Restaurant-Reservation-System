@@ -7,17 +7,17 @@ import {
   verifyRefreshToken,
   TokenPayload,
 } from '../utils/jwt';
-import { LoginCredentials, AuthResponse } from '@restaurant-reservation/shared';
+import { LoginCredentials, AuthResponse, CreateUserDto, UserRole } from '@restaurant-reservation/shared';
 import { UnauthorizedError } from '../errors/AppError';
-import { hashPassword, comparePassword } from '../utils/password';
+import { hashPassword } from '../utils/password';
 
 export class AuthService {
   private userService: UserService;
   private sessionRepository: SessionRepository;
 
-  constructor(private prisma: PrismaClient) {
-    this.userService = new UserService(prisma);
-    this.sessionRepository = new SessionRepository(prisma);
+  constructor(_prisma: PrismaClient) {
+    this.userService = new UserService(_prisma);
+    this.sessionRepository = new SessionRepository(_prisma);
   }
 
   async register(data: {
@@ -28,7 +28,20 @@ export class AuthService {
     phone?: string;
     role?: string;
   }): Promise<AuthResponse> {
-    const user = await this.userService.createUser(data);
+    // Construct CreateUserDto properly
+    const userData: CreateUserDto = {
+      email: data.email,
+      password: data.password,
+      firstName: data.firstName,
+      lastName: data.lastName,
+    };
+    if (data.phone) {
+      userData.phone = data.phone;
+    }
+    if (data.role && ['CUSTOMER', 'STAFF', 'ADMIN'].includes(data.role)) {
+      userData.role = data.role as UserRole;
+    }
+    const user = await this.userService.createUser(userData);
 
     const tokenPayload: TokenPayload = {
       userId: user.id,

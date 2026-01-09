@@ -26,6 +26,13 @@ export class WaitlistController {
 
   async getByRestaurant(req: Request, res: Response): Promise<void> {
     const { restaurantId } = req.params;
+    if (!restaurantId) {
+      res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required',
+      });
+      return;
+    }
     const entries = await this.waitlistService.getWaitlistByRestaurant(restaurantId);
     res.json({
       success: true,
@@ -52,7 +59,14 @@ export class WaitlistController {
   async updateStatus(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
     const { status } = req.body;
-    if (!['WAITING', 'NOTIFIED', 'SEATED', 'CANCELLED'].includes(status)) {
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Waitlist entry ID is required',
+      });
+      return;
+    }
+    if (!status || !['WAITING', 'NOTIFIED', 'SEATED', 'CANCELLED'].includes(status)) {
       res.status(400).json({
         success: false,
         error: 'Invalid status',
@@ -68,6 +82,13 @@ export class WaitlistController {
 
   async remove(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Waitlist entry ID is required',
+      });
+      return;
+    }
     await this.waitlistService.removeFromWaitlist(id);
     res.json({
       success: true,
@@ -85,9 +106,16 @@ export class WaitlistController {
     }
 
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Waitlist entry ID is required',
+      });
+      return;
+    }
     const { action } = req.body; // 'accept' or 'decline'
 
-    if (!['accept', 'decline'].includes(action)) {
+    if (!action || !['accept', 'decline'].includes(action)) {
       res.status(400).json({
         success: false,
         error: 'Invalid action. Must be "accept" or "decline"',

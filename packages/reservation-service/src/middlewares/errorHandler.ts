@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { AppError, ConflictError } from '../errors/AppError';
+import { AppError } from '../errors/AppError';
 import { logger } from '../config/logger';
 import { ZodError } from 'zod';
 import { Prisma } from '@prisma/client';
@@ -8,7 +8,7 @@ export function errorHandler(
   err: Error,
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void {
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
@@ -28,36 +28,35 @@ export function errorHandler(
   }
 
   // Handle Prisma unique constraint errors
-  if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    if (err.code === 'P2002') {
-      // Unique constraint violation
-      const target = err.meta?.target as string[] | undefined;
-      let message = 'A record with this information already exists';
-      
-      if (target) {
-        if (target.includes('table_id') && target.includes('reservation_date') && target.includes('reservation_time')) {
-          message = 'This table is already reserved for the selected date and time';
-        } else if (target.includes('reservationNumber')) {
-          message = 'A reservation with this number already exists';
-        }
+  if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+    // Unique constraint violation
+    const prismaError = err as Prisma.PrismaClientKnownRequestError;
+    const target = prismaError.meta?.target as string[] | undefined;
+    let message = 'A record with this information already exists';
+    
+    if (target) {
+      if (target.includes('table_id') && target.includes('reservation_date') && target.includes('reservation_time')) {
+        message = 'This table is already reserved for the selected date and time';
+      } else if (target.includes('reservationNumber')) {
+        message = 'A reservation with this number already exists';
       }
-      
-      res.status(409).json({
-        success: false,
-        error: message,
-      });
-      return;
     }
     
-    // Handle other Prisma errors
-    if (err.code === 'P2025') {
-      // Record not found
-      res.status(404).json({
-        success: false,
-        error: 'Record not found',
-      });
-      return;
-    }
+    res.status(409).json({
+      success: false,
+      error: message,
+    });
+    return;
+  }
+  
+  // Handle other Prisma errors
+  if (err && typeof err === 'object' && 'code' in err && err.code === 'P2025') {
+    // Record not found
+    res.status(404).json({
+      success: false,
+      error: 'Record not found',
+    });
+    return;
   }
 
   logger.error('Unhandled error:', {

@@ -26,11 +26,14 @@ export function ProfilePage() {
     setIsLoading(true);
 
     try {
-      const response = await authService.updateProfile({
+      const updateData: { firstName: string; lastName: string; phone?: string } = {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        phone: formData.phone || undefined,
-      });
+      };
+      if (formData.phone) {
+        updateData.phone = formData.phone;
+      }
+      const response = await authService.updateProfile(updateData);
       dispatch(setUser(response.data));
       setIsEditing(false);
       // Update localStorage

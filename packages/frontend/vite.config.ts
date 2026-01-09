@@ -13,6 +13,18 @@ export default defineConfig({
   optimizeDeps: {
     include: ['@restaurant-reservation/shared'],
   },
+  build: {
+    commonjsOptions: {
+      transformMixedEsModules: true,
+      include: [/shared/, /node_modules/],
+    },
+    rollupOptions: {
+      external: [],
+      output: {
+        format: 'es',
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

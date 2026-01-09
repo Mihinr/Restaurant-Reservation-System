@@ -18,7 +18,7 @@ export function WaitlistPage() {
 
   const dispatch = useAppDispatch();
   const { restaurants } = useAppSelector((state) => state.restaurant);
-  const { entries, myWaitlistEntries, isLoading, error, currentEntry } = useAppSelector((state) => state.waitlist);
+  const { entries, myWaitlistEntries, isLoading, error } = useAppSelector((state) => state.waitlist);
   const { user } = useAppSelector((state) => state.auth);
 
   const isStaff = user && isStaffOrAdmin(user.role);

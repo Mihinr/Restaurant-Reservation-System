@@ -24,9 +24,9 @@ async function main() {
     const reservation = await prisma.reservation.create({
       data: {
         reservationNumber: generateReservationNumber(),
-        userId: userIds[Math.floor(Math.random() * userIds.length)] || userIds[0],
-        restaurantId: restaurantIds[Math.floor(Math.random() * restaurantIds.length)] || restaurantIds[0],
-        tableId: tableIds[Math.floor(Math.random() * tableIds.length)],
+        userId: userIds[Math.floor(Math.random() * userIds.length)] ?? userIds[0] ?? '',
+        restaurantId: restaurantIds[Math.floor(Math.random() * restaurantIds.length)] ?? restaurantIds[0] ?? '',
+        tableId: tableIds[Math.floor(Math.random() * tableIds.length)] ?? '',
         partySize: Math.floor(Math.random() * 8) + 1,
         reservationDate,
         reservationTime,

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ReservationService } from '../services/reservation.service';
 import { createReservationSchema, updateReservationSchema } from '../validators/reservation.validator';
 import { AuthRequest } from '../middlewares/auth.middleware';
-import { isStaffOrAdmin } from '@restaurant-reservation/shared';
+import { isStaffOrAdmin, CreateReservationDto, UpdateReservationDto } from '@restaurant-reservation/shared';
 
 export class ReservationController {
   constructor(private reservationService: ReservationService) {}
@@ -20,7 +20,24 @@ export class ReservationController {
 
     try {
       // Validation already done by middleware, but we need to ensure type safety
-      const data = req.body as z.infer<typeof createReservationSchema>;
+      const validatedData = req.body as z.infer<typeof createReservationSchema>;
+      // Construct DTO without undefined values for exactOptionalPropertyTypes
+      const data: CreateReservationDto = {
+        restaurantId: validatedData.restaurantId,
+        reservationDate: validatedData.reservationDate,
+        reservationTime: validatedData.reservationTime,
+        partySize: validatedData.partySize,
+        customerName: validatedData.customerName,
+        customerPhone: validatedData.customerPhone,
+      };
+      if (validatedData.tableIds && validatedData.tableIds.length > 0) {
+        data.tableIds = validatedData.tableIds;
+      } else if (validatedData.tableId) {
+        data.tableId = validatedData.tableId;
+      }
+      if (validatedData.specialRequests) {
+        data.specialRequests = validatedData.specialRequests;
+      }
       const reservation = await this.reservationService.createReservation(req.user.userId, data);
       res.status(201).json({
         success: true,
@@ -42,6 +59,13 @@ export class ReservationController {
 
   async getById(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Reservation ID is required',
+      });
+      return;
+    }
     try {
       const reservation = await this.reservationService.getReservationById(id);
       res.json({
@@ -100,9 +124,41 @@ export class ReservationController {
 
   async update(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Reservation ID is required',
+      });
+      return;
+    }
     // Validation already done by middleware, but we need to ensure type safety
-    const data = req.body as z.infer<typeof updateReservationSchema>;
-    const reservation = await this.reservationService.updateReservation(id, data, data.version);
+    const validatedData = req.body as z.infer<typeof updateReservationSchema>;
+    // Construct DTO without undefined values for exactOptionalPropertyTypes
+    const data: UpdateReservationDto = {};
+    if (validatedData.tableIds !== undefined) {
+      data.tableIds = validatedData.tableIds;
+    } else if (validatedData.tableId !== undefined) {
+      data.tableId = validatedData.tableId;
+    }
+    if (validatedData.reservationDate !== undefined) {
+      data.reservationDate = validatedData.reservationDate;
+    }
+    if (validatedData.reservationTime !== undefined) {
+      data.reservationTime = validatedData.reservationTime;
+    }
+    if (validatedData.partySize !== undefined) {
+      data.partySize = validatedData.partySize;
+    }
+    if (validatedData.customerName !== undefined) {
+      data.customerName = validatedData.customerName;
+    }
+    if (validatedData.customerPhone !== undefined) {
+      data.customerPhone = validatedData.customerPhone;
+    }
+    if (validatedData.specialRequests !== undefined) {
+      data.specialRequests = validatedData.specialRequests;
+    }
+    const reservation = await this.reservationService.updateReservation(id, data, validatedData.version);
     res.json({
       success: true,
       data: reservation,
@@ -111,6 +167,13 @@ export class ReservationController {
 
   async cancel(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Reservation ID is required',
+      });
+      return;
+    }
     await this.reservationService.cancelReservation(id);
     res.json({
       success: true,
@@ -122,7 +185,15 @@ export class ReservationController {
     const { restaurantId } = req.params;
     const { date, time, duration } = req.query;
 
-    if (!date || !time) {
+    if (!restaurantId) {
+      res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required',
+      });
+      return;
+    }
+
+    if (!date || !time || typeof date !== 'string' || typeof time !== 'string') {
       res.status(400).json({
         success: false,
         error: 'Date and time are required',
@@ -130,11 +201,20 @@ export class ReservationController {
       return;
     }
 
+    const durationMinutes = duration ? parseInt(duration as string, 10) : 90;
+    if (isNaN(durationMinutes) || durationMinutes <= 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid duration',
+      });
+      return;
+    }
+
     const tableIds = await this.reservationService.getReservedTableIds(
       restaurantId,
-      date as string,
-      time as string,
-      duration ? parseInt(duration as string, 10) : 90
+      date,
+      time,
+      durationMinutes
     );
 
     res.json({
@@ -145,6 +225,14 @@ export class ReservationController {
 
   async removeTable(req: Request, res: Response): Promise<void> {
     const { id, tableId } = req.params;
+
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Reservation ID is required',
+      });
+      return;
+    }
 
     if (!tableId) {
       res.status(400).json({

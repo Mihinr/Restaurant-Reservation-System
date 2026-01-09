@@ -23,9 +23,9 @@ const baseReservationSchema = baseReservationSchemaObject.refine(
 
 // Preprocess the entire object to convert empty strings to undefined for optional fields only
 const preprocessEmptyStrings = z.preprocess(
-  (data) => {
+  (data: unknown) => {
     if (typeof data !== 'object' || data === null) return data;
-    const processed = { ...data };
+    const processed = { ...(data as Record<string, unknown>) };
     // Convert empty strings to undefined for optional fields only
     // customerName and customerPhone are required, so don't convert them
     if (processed.specialRequests === '') processed.specialRequests = undefined;
@@ -40,9 +40,9 @@ export const createReservationSchema = preprocessEmptyStrings;
 // For update, we need to preprocess and then make fields partial
 // Use baseReservationSchemaObject (not baseReservationSchema) so we can call .partial()
 const preprocessForUpdate = z.preprocess(
-  (data) => {
+  (data: unknown) => {
     if (typeof data !== 'object' || data === null) return data;
-    const processed = { ...data };
+    const processed = { ...(data as Record<string, unknown>) };
     // Convert empty strings to undefined for optional fields
     if (processed.customerName === '') processed.customerName = undefined;
     if (processed.customerPhone === '') processed.customerPhone = undefined;

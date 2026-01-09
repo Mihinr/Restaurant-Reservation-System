@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { reservationService } from '../../services/reservationService';
 import { Reservation, CreateReservationDto } from '@restaurant-reservation/shared';
 
-interface ReservationState {
+export interface ReservationState {
   reservations: Reservation[];
   currentReservation: Reservation | null;
   isLoading: boolean;

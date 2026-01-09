@@ -4,12 +4,8 @@ import { PrismaClient } from '@prisma/client';
 export function createHealthRoutes(prisma: PrismaClient): Router {
   const router = Router();
 
-  router.get('/health', (_req: Request, res: Response) => {
-    res.json({
-      status: 'ok',
-      service: 'table-service',
-      timestamp: new Date().toISOString(),
-    });
+  router.get('/', (_req: Request, res: Response) => {
+    res.status(200).json({ status: 'ok' });
   });
 
   router.get('/ready', async (_req: Request, res: Response) => {

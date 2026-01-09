@@ -6,8 +6,6 @@ import { errorHandler } from './middlewares/errorHandler';
 import { createReservationRoutes } from './routes/reservation.routes';
 import { createWaitlistRoutes } from './routes/waitlist.routes';
 import { createHealthRoutes } from './routes/health.routes';
-import { logger } from './config/logger';
-
 export function createApp(prisma: PrismaClient): Express {
   const app = express();
 

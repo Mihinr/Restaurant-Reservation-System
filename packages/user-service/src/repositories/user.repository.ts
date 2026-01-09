@@ -1,4 +1,7 @@
-import { PrismaClient, User, Role } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+
+type User = Prisma.UserGetPayload<{}>;
+type Role = 'CUSTOMER' | 'STAFF' | 'ADMIN';
 import { CreateUserDto, UpdateUserDto } from '@restaurant-reservation/shared';
 
 export class UserRepository {
@@ -43,14 +46,22 @@ export class UserRepository {
   }
 
   async update(id: string, data: UpdateUserDto): Promise<User> {
+    const updateData: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string | null;
+      updatedAt: Date;
+    } = {
+      updatedAt: new Date(),
+    };
+
+    if (data.firstName !== undefined) updateData.firstName = data.firstName;
+    if (data.lastName !== undefined) updateData.lastName = data.lastName;
+    if (data.phone !== undefined) updateData.phone = data.phone ?? null;
+
     return this.prisma.user.update({
       where: { id },
-      data: {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        phone: data.phone,
-        updatedAt: new Date(),
-      },
+      data: updateData,
     });
   }
 

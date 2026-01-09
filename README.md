@@ -26,7 +26,91 @@ The system consists of three microservices and a frontend application:
 - MySQL 8.0
 - npm 9+
 
-## Local Development Setup
+## Quick Start with Docker (Recommended)
+
+The easiest way to get started is using Docker Compose:
+
+### 1. Prerequisites
+
+- Docker 20.10+ ([Install Docker](https://docs.docker.com/get-docker/))
+- Docker Compose 2.0+ (included with Docker Desktop)
+
+### 2. Clone and Setup
+
+```bash
+git clone https://github.com/Mihinr/Restaurant-Reservation-System.git
+cd Restaurant-Reservation-System
+```
+
+### 3. Configure Environment
+
+```bash
+# Copy example environment file
+cp .env.example .env
+
+# Edit .env and update:
+# - MYSQL_ROOT_PASSWORD (use a strong password)
+# - JWT_SECRET (minimum 32 characters)
+# - REFRESH_TOKEN_SECRET (minimum 32 characters)
+```
+
+### 4. Run Setup Script
+
+**Linux/Mac:**
+```bash
+./docker-setup.sh
+```
+
+**Windows (PowerShell):**
+```powershell
+.\docker-setup.ps1
+```
+
+**Or manually:**
+```bash
+# Build and start services
+docker-compose build
+docker-compose up -d
+
+# Run migrations
+docker-compose exec user-service npm run db:migrate
+docker-compose exec reservation-service npm run db:migrate
+docker-compose exec table-service npm run db:migrate
+
+# Seed databases
+docker-compose exec user-service npm run db:seed
+docker-compose exec reservation-service npm run db:seed
+docker-compose exec table-service npm run db:seed
+```
+
+### 5. Access the Application
+
+- **Frontend:** http://localhost:3000
+- **User Service:** http://localhost:3001
+- **Reservation Service:** http://localhost:3002
+- **Table Service:** http://localhost:3003
+
+### Docker Commands
+
+```bash
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+
+# Restart services
+docker-compose restart
+
+# Development mode (with hot reload)
+docker-compose -f docker-compose.dev.yml up
+```
+
+For detailed Docker documentation, see [DOCKER_SETUP_GUIDE.md](./DOCKER_SETUP_GUIDE.md).
+
+---
+
+## Local Development Setup (Without Docker)
 
 ### 1. Clone the Repository
 
@@ -72,6 +156,8 @@ LOG_LEVEL="info"
 NODE_ENV=development
 PORT=3002
 DATABASE_URL="mysql://root:password@localhost:3306/restaurant_reservation_service"
+JWT_SECRET="your-super-secret-jwt-key-change-in-production"
+TABLE_SERVICE_URL="http://localhost:3003"
 LOG_LEVEL="info"
 ```
 
@@ -80,6 +166,7 @@ LOG_LEVEL="info"
 NODE_ENV=development
 PORT=3003
 DATABASE_URL="mysql://root:password@localhost:3306/restaurant_table_service"
+RESERVATION_SERVICE_URL="http://localhost:3002"
 LOG_LEVEL="info"
 ```
 
@@ -113,6 +200,7 @@ Or start each service individually:
 cd packages/user-service && npm run dev
 cd packages/reservation-service && npm run dev
 cd packages/table-service && npm run dev
+cd packages/frontend && npm run dev
 ```
 
 ## API Endpoints
@@ -170,7 +258,12 @@ restaurant-reservation-system/
 │   ├── table-service/         # Restaurant & table service
 │   ├── frontend/              # React frontend (to be implemented)
 │   └── shared/                # Shared types and utilities
-├── docker-compose.yml         # Docker configuration (to be added)
+├── docker-compose.yml         # Docker Compose for production
+├── docker-compose.dev.yml     # Docker Compose for development
+├── docker-setup.sh            # Setup script (Linux/Mac)
+├── docker-setup.ps1           # Setup script (Windows)
+├── DOCKER_SETUP_GUIDE.md      # Comprehensive Docker guide
+└── DOCKER_QUICK_START.md      # Quick start guide
 └── README.md
 ```
 
@@ -180,9 +273,9 @@ restaurant-reservation-system/
 - ✅ User Service implementation
 - ✅ Reservation Service implementation
 - ✅ Table Service implementation
-- ⏳ Frontend implementation (in progress)
+- ✅ Frontend implementation
+- ✅ Docker configuration
 - ⏳ Testing implementation
-- ⏳ Docker configuration
 
 ## License
 

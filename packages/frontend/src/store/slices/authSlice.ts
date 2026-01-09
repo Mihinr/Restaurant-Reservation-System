@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authService } from '../../services/authService';
 import { User, LoginCredentials } from '@restaurant-reservation/shared';
 
-interface AuthState {
+export interface AuthState {
   user: User | null;
   token: string | null;
   isLoading: boolean;

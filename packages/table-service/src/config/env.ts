@@ -7,12 +7,13 @@ import { existsSync } from 'fs';
 // __dirname will be packages/table-service/src/config (or dist/config)
 const packageEnvPath = path.resolve(__dirname, '../../.env');
 
-if (!existsSync(packageEnvPath)) {
-  throw new Error(`Could not find .env file at: ${packageEnvPath}`);
+// Load .env file if it exists (for local development)
+// In Docker, environment variables are provided via docker-compose, so .env file is optional
+if (existsSync(packageEnvPath)) {
+  // Use override: true to ensure package-specific .env values override any existing env vars
+  dotenv.config({ path: packageEnvPath, override: true });
 }
-
-// Use override: true to ensure package-specific .env values override any existing env vars
-dotenv.config({ path: packageEnvPath, override: true });
+// If .env file doesn't exist, we rely on process.env (which is populated by Docker Compose)
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

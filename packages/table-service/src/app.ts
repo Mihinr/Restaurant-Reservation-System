@@ -6,7 +6,6 @@ import { errorHandler } from './middlewares/errorHandler';
 import { createRestaurantRoutes } from './routes/restaurant.routes';
 import { createTableRoutes } from './routes/table.routes';
 import { createHealthRoutes } from './routes/health.routes';
-import { logger } from './config/logger';
 import { TableController } from './controllers/table.controller';
 import { TableService } from './services/table.service';
 

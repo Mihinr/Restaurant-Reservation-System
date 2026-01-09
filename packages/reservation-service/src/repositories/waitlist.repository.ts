@@ -1,4 +1,7 @@
-import { PrismaClient, WaitlistEntry, WaitlistStatus } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+
+type WaitlistEntry = Prisma.WaitlistEntryGetPayload<{}>;
+type WaitlistStatus = 'WAITING' | 'NOTIFIED' | 'SEATED' | 'CANCELLED';
 import { CreateWaitlistEntryDto } from '@restaurant-reservation/shared';
 
 export class WaitlistRepository {

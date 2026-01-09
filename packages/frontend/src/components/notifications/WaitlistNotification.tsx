@@ -20,6 +20,7 @@ export function WaitlistNotification() {
       }, 10000);
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [dispatch, token, user]);
 
   // Find notified entries from customer's own waitlist

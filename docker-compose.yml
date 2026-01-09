@@ -1,0 +1,130 @@
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: restaurant-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: restaurant_system
+      TZ: UTC
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - restaurant-network
+
+  # User Service
+  user-service:
+    build:
+      context: .
+      dockerfile: packages/user-service/Dockerfile
+    working_dir: /app/packages/user-service
+    container_name: restaurant-user-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3001
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/restaurant_user_service
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-32-chars}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-your-refresh-token-secret-min-32-chars}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3001:3001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - restaurant-network
+    volumes:
+      - ./packages/user-service/prisma:/app/prisma:ro
+
+  # Reservation Service
+  reservation-service:
+    build:
+      context: .
+      dockerfile: packages/reservation-service/Dockerfile
+    working_dir: /app/packages/reservation-service
+    container_name: restaurant-reservation-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3002
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/restaurant_reservation_service
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-32-chars}
+      TABLE_SERVICE_URL: http://table-service:3003
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3002:3002"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    networks:
+      - restaurant-network
+    volumes:
+      - ./packages/reservation-service/prisma:/app/prisma:ro
+
+  # Table Service
+  table-service:
+    build:
+      context: .
+      dockerfile: packages/table-service/Dockerfile
+    working_dir: /app/packages/table-service
+    container_name: restaurant-table-service
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3003
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/restaurant_table_service
+      RESERVATION_SERVICE_URL: http://reservation-service:3002
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3003:3003"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      reservation-service:
+        condition: service_started
+    networks:
+      - restaurant-network
+    volumes:
+      - ./packages/table-service/prisma:/app/prisma:ro
+
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/frontend/Dockerfile
+    container_name: restaurant-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - user-service
+      - reservation-service
+      - table-service
+    networks:
+      - restaurant-network
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:3001}
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  restaurant-network:
+    driver: bridge

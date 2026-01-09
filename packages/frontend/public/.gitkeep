@@ -1,0 +1,2 @@
+# This file ensures the public directory is tracked in git
+# Vite will copy files from this directory to the dist folder during build

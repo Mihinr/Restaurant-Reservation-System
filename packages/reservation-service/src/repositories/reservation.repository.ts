@@ -1,4 +1,7 @@
-import { PrismaClient, Reservation, ReservationStatus } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+
+type Reservation = Prisma.ReservationGetPayload<{}>;
+type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'SEATED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
 import { CreateReservationDto, UpdateReservationDto } from '@restaurant-reservation/shared';
 
 export class ReservationRepository {
@@ -13,7 +16,9 @@ export class ReservationRepository {
 
   async create(data: CreateReservationDto & { userId: string; reservationNumber: string }): Promise<Reservation> {
     const reservationDate = new Date(data.reservationDate);
-    const [hours, minutes] = data.reservationTime.split(':').map(Number);
+    const timeParts = data.reservationTime.split(':').map(Number);
+    const hours = timeParts[0] ?? 0;
+    const minutes = timeParts[1] ?? 0;
     const reservationTime = new Date();
     reservationTime.setHours(hours, minutes, 0, 0);
 
@@ -25,14 +30,14 @@ export class ReservationRepository {
         reservationNumber: data.reservationNumber,
         userId: data.userId,
         restaurantId: data.restaurantId,
-        tableId: tableIds.length === 1 ? tableIds[0] : null, // Keep for backward compatibility
+        tableId: tableIds.length === 1 ? tableIds[0]! : null, // Keep for backward compatibility
         partySize: data.partySize,
         reservationDate,
         reservationTime,
         durationMinutes: 90,
-        customerName: data.customerName,
-        customerPhone: data.customerPhone,
-        specialRequests: data.specialRequests,
+        customerName: data.customerName ?? null,
+        customerPhone: data.customerPhone ?? null,
+        specialRequests: data.specialRequests ?? null,
         status: 'CONFIRMED',
         tables: {
           create: tableIds.map(tableId => ({
@@ -166,7 +171,7 @@ export class ReservationRepository {
       });
 
       // Create new table relationships
-      if (data.tableIds.length > 0) {
+      if (data.tableIds && data.tableIds.length > 0) {
         await this.prisma.reservationTable.createMany({
           data: data.tableIds.map(tableId => ({
             reservationId: id,
@@ -176,7 +181,7 @@ export class ReservationRepository {
       }
 
       // Update legacy tableId field for backward compatibility
-      updateData.tableId = data.tableIds.length === 1 ? data.tableIds[0] : null;
+      updateData.tableId = data.tableIds && data.tableIds.length === 1 ? data.tableIds[0]! : null;
     } else if (data.tableId !== undefined) {
       // Legacy support: single tableId
       updateData.tableId = data.tableId;
@@ -194,19 +199,29 @@ export class ReservationRepository {
       }
     }
 
-    if (data.partySize !== undefined) updateData.partySize = data.partySize;
+    if (data.partySize !== undefined && data.partySize !== null) {
+      updateData.partySize = data.partySize;
+    }
     if (data.reservationDate) {
       updateData.reservationDate = new Date(data.reservationDate);
     }
     if (data.reservationTime) {
-      const [hours, minutes] = data.reservationTime.split(':').map(Number);
+      const timeParts = data.reservationTime.split(':').map(Number);
+      const hours = timeParts[0] ?? 0;
+      const minutes = timeParts[1] ?? 0;
       const reservationTime = new Date();
       reservationTime.setHours(hours, minutes, 0, 0);
       updateData.reservationTime = reservationTime;
     }
-    if (data.customerName !== undefined) updateData.customerName = data.customerName;
-    if (data.customerPhone !== undefined) updateData.customerPhone = data.customerPhone;
-    if (data.specialRequests !== undefined) updateData.specialRequests = data.specialRequests;
+    if (data.customerName !== undefined) {
+      updateData.customerName = data.customerName ?? null;
+    }
+    if (data.customerPhone !== undefined) {
+      updateData.customerPhone = data.customerPhone ?? null;
+    }
+    if (data.specialRequests !== undefined) {
+      updateData.specialRequests = data.specialRequests ?? null;
+    }
 
     if (expectedVersion !== undefined) {
       updateData.version = { increment: 1 };
@@ -266,7 +281,7 @@ export class ReservationRepository {
       if (remainingTables.length === 0) {
         updateData.tableId = null;
       } else if (remainingTables.length === 1) {
-        updateData.tableId = remainingTables[0].tableId;
+        updateData.tableId = remainingTables[0]!.tableId;
       } else {
         updateData.tableId = null; // Multiple tables, can't use legacy field
       }
@@ -323,13 +338,13 @@ export class ReservationRepository {
 
     // Collect table IDs from both legacy tableId field and new tables relation
     const tableIds = new Set<string>();
-    reservations.forEach(reservation => {
+    reservations.forEach((reservation: Reservation & { tables: Array<{ tableId: string }> }) => {
       // Legacy tableId
       if (reservation.tableId) {
         tableIds.add(reservation.tableId);
       }
       // New tables relation
-      reservation.tables.forEach(rt => {
+      reservation.tables.forEach((rt: { tableId: string }) => {
         tableIds.add(rt.tableId);
       });
     });

@@ -14,7 +14,7 @@ export interface AuthRequest extends Request {
   user?: TokenPayload;
 }
 
-export function authenticate(req: AuthRequest, res: Response, next: NextFunction): void {
+export function authenticate(req: AuthRequest, _res: Response, next: NextFunction): void {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -43,7 +43,7 @@ export function authenticate(req: AuthRequest, res: Response, next: NextFunction
 }
 
 export function authorize(...roles: UserRole[]) {
-  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+  return (req: AuthRequest, _res: Response, next: NextFunction): void => {
     if (!req.user) {
       return next(new UnauthorizedError('Authentication required'));
     }

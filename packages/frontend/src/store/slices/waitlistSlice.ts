@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { waitlistService } from '../../services/waitlistService';
 import { WaitlistEntry, CreateWaitlistEntryDto } from '@restaurant-reservation/shared';
 
-interface WaitlistState {
+export interface WaitlistState {
   entries: WaitlistEntry[];
   myWaitlistEntries: WaitlistEntry[]; // Customer's own waitlist entries
   currentEntry: WaitlistEntry | null;

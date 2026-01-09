@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { UserService } from '../services/user.service';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { updateUserSchema } from '../validators/user.validator';
+import { UpdateUserDto } from '@restaurant-reservation/shared';
 
 export class UserController {
   constructor(private userService: UserService) {}
@@ -31,7 +32,12 @@ export class UserController {
       return;
     }
 
-    const data = updateUserSchema.parse(req.body);
+    const validatedData = updateUserSchema.parse(req.body);
+    // Construct DTO without undefined values for exactOptionalPropertyTypes
+    const data: UpdateUserDto = {};
+    if (validatedData.firstName !== undefined) data.firstName = validatedData.firstName;
+    if (validatedData.lastName !== undefined) data.lastName = validatedData.lastName;
+    if (validatedData.phone !== undefined) data.phone = validatedData.phone;
     const user = await this.userService.updateUser(req.user.userId, data);
     res.json({
       success: true,

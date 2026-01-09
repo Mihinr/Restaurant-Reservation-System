@@ -1,4 +1,7 @@
-import { PrismaClient, Table, TableStatus } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+
+type Table = Prisma.TableGetPayload<{}>;
+type TableStatus = 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE';
 import { CreateTableDto, UpdateTableDto } from '@restaurant-reservation/shared';
 
 export class TableRepository {
@@ -60,16 +63,34 @@ export class TableRepository {
   }
 
   async update(id: string, data: UpdateTableDto): Promise<Table> {
+    const updateData: {
+      tableNumber?: string;
+      capacity?: number;
+      minPartySize?: number;
+      status?: TableStatus;
+      statusUpdatedAt?: Date;
+      updatedAt: Date;
+    } = {
+      updatedAt: new Date(),
+    };
+
+    if (data.tableNumber !== undefined) {
+      updateData.tableNumber = data.tableNumber;
+    }
+    if (data.capacity !== undefined) {
+      updateData.capacity = data.capacity;
+    }
+    if (data.minPartySize !== undefined) {
+      updateData.minPartySize = data.minPartySize;
+    }
+    if (data.status !== undefined) {
+      updateData.status = data.status;
+      updateData.statusUpdatedAt = new Date();
+    }
+
     return this.prisma.table.update({
       where: { id },
-      data: {
-        tableNumber: data.tableNumber,
-        capacity: data.capacity,
-        minPartySize: data.minPartySize,
-        status: data.status,
-        statusUpdatedAt: data.status ? new Date() : undefined,
-        updatedAt: new Date(),
-      },
+      data: updateData,
     });
   }
 

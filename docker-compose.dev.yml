@@ -1,0 +1,164 @@
+version: '3.8'
+
+# Development Docker Compose with hot reload
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: restaurant-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: restaurant_system
+      TZ: UTC
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data_dev:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - restaurant-network-dev
+
+  # User Service (Development with hot reload)
+  user-service:
+    build:
+      context: .
+      dockerfile: packages/user-service/Dockerfile.dev
+    container_name: restaurant-user-service-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/restaurant_user_service
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-32-chars}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      REFRESH_TOKEN_SECRET: ${REFRESH_TOKEN_SECRET:-your-refresh-token-secret-min-32-chars}
+      REFRESH_TOKEN_EXPIRES_IN: ${REFRESH_TOKEN_EXPIRES_IN:-7d}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    ports:
+      - "3001:3001"
+    working_dir: /app/packages/user-service
+    volumes:
+      - ./packages/user-service:/app/packages/user-service
+      - ./packages/shared:/app/packages/shared
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+      - /app/node_modules
+      - /app/packages/user-service/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - restaurant-network-dev
+    command: npm run dev
+
+  # Reservation Service (Development with hot reload)
+  reservation-service:
+    build:
+      context: .
+      dockerfile: packages/reservation-service/Dockerfile.dev
+    container_name: restaurant-reservation-service-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/restaurant_reservation_service
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production-min-32-chars}
+      TABLE_SERVICE_URL: http://table-service:3003
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    ports:
+      - "3002:3002"
+    working_dir: /app/packages/reservation-service
+    volumes:
+      - ./packages/reservation-service:/app/packages/reservation-service
+      - ./packages/shared:/app/packages/shared
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+      - /app/node_modules
+      - /app/packages/reservation-service/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    networks:
+      - restaurant-network-dev
+    command: npm run dev
+
+  # Table Service (Development with hot reload)
+  table-service:
+    build:
+      context: .
+      dockerfile: packages/table-service/Dockerfile.dev
+    container_name: restaurant-table-service-dev
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/restaurant_table_service
+      RESERVATION_SERVICE_URL: http://reservation-service:3002
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+    ports:
+      - "3003:3003"
+    working_dir: /app/packages/table-service
+    volumes:
+      - ./packages/table-service:/app/packages/table-service
+      - ./packages/shared:/app/packages/shared
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+      - /app/node_modules
+      - /app/packages/table-service/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+      reservation-service:
+        condition: service_started
+    networks:
+      - restaurant-network-dev
+    command: npm run dev
+
+  # Frontend (Development with hot reload)
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/frontend/Dockerfile.dev
+    container_name: restaurant-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    working_dir: /app/packages/frontend
+    volumes:
+      - ./packages/frontend:/app/packages/frontend
+      - ./packages/shared:/app/packages/shared
+      - ./package.json:/app/package.json
+      - ./package-lock.json:/app/package-lock.json
+      - ./tsconfig.base.json:/app/tsconfig.base.json
+      - /app/node_modules
+      - /app/packages/frontend/node_modules
+    depends_on:
+      - user-service
+      - reservation-service
+      - table-service
+    networks:
+      - restaurant-network-dev
+    environment:
+      - VITE_API_URL=http://localhost:3001
+    command: npm run dev
+
+volumes:
+  mysql_data_dev:
+    driver: local
+
+networks:
+  restaurant-network-dev:
+    driver: bridge

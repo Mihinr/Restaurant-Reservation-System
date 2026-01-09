@@ -5,13 +5,13 @@ import {
   UpdateRestaurantDto,
   Restaurant as RestaurantType,
 } from '@restaurant-reservation/shared';
-import { NotFoundError, ConflictError } from '../errors/AppError';
+import { NotFoundError } from '../errors/AppError';
 
 export class RestaurantService {
   private restaurantRepository: RestaurantRepository;
 
-  constructor(private prisma: PrismaClient) {
-    this.restaurantRepository = new RestaurantRepository(prisma);
+  constructor(_prisma: PrismaClient) {
+    this.restaurantRepository = new RestaurantRepository(_prisma);
   }
 
   async createRestaurant(data: CreateRestaurantDto): Promise<RestaurantType> {
@@ -86,8 +86,8 @@ export class RestaurantService {
       city: restaurant.city,
       state: restaurant.state,
       zipCode: restaurant.zipCode,
-      phone: restaurant.phone || undefined,
-      email: restaurant.email || undefined,
+      ...(restaurant.phone ? { phone: restaurant.phone } : {}),
+      ...(restaurant.email ? { email: restaurant.email } : {}),
       timezone: restaurant.timezone,
       openingTime: this.formatTime(restaurant.openingTime),
       closingTime: this.formatTime(restaurant.closingTime),

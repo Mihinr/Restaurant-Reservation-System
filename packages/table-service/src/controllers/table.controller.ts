@@ -6,6 +6,7 @@ import {
   updateTableSchema,
   availabilitySearchSchema,
 } from '../validators/table.validator';
+import { UpdateTableDto } from '@restaurant-reservation/shared';
 
 export class TableController {
   constructor(private tableService: TableService) {}
@@ -21,6 +22,13 @@ export class TableController {
 
   async getById(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Table ID is required',
+      });
+      return;
+    }
     const table = await this.tableService.getTableById(id);
     res.json({
       success: true,
@@ -30,6 +38,13 @@ export class TableController {
 
   async getByRestaurant(req: Request, res: Response): Promise<void> {
     const { restaurantId } = req.params;
+    if (!restaurantId) {
+      res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required',
+      });
+      return;
+    }
     const tables = await this.tableService.getTablesByRestaurant(restaurantId);
     res.json({
       success: true,
@@ -39,7 +54,20 @@ export class TableController {
 
   async update(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
-    const data = updateTableSchema.parse(req.body);
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Table ID is required',
+      });
+      return;
+    }
+    const validatedData = updateTableSchema.parse(req.body);
+    // Construct DTO without undefined values for exactOptionalPropertyTypes
+    const data: UpdateTableDto = {};
+    if (validatedData.tableNumber !== undefined) data.tableNumber = validatedData.tableNumber;
+    if (validatedData.capacity !== undefined) data.capacity = validatedData.capacity;
+    if (validatedData.minPartySize !== undefined) data.minPartySize = validatedData.minPartySize;
+    if (validatedData.status !== undefined) data.status = validatedData.status;
     const table = await this.tableService.updateTable(id, data);
     res.json({
       success: true,
@@ -49,8 +77,15 @@ export class TableController {
 
   async updateStatus(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Table ID is required',
+      });
+      return;
+    }
     const { status } = req.body;
-    if (!['AVAILABLE', 'OCCUPIED', 'RESERVED', 'MAINTENANCE'].includes(status)) {
+    if (!status || !['AVAILABLE', 'OCCUPIED', 'RESERVED', 'MAINTENANCE'].includes(status)) {
       res.status(400).json({
         success: false,
         error: 'Invalid status',
@@ -66,6 +101,13 @@ export class TableController {
 
   async delete(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({
+        success: false,
+        error: 'Table ID is required',
+      });
+      return;
+    }
     await this.tableService.deleteTable(id);
     res.json({
       success: true,
@@ -75,6 +117,13 @@ export class TableController {
 
   async getAvailability(req: Request, res: Response): Promise<void> {
     const { restaurantId } = req.params;
+    if (!restaurantId) {
+      res.status(400).json({
+        success: false,
+        error: 'Restaurant ID is required',
+      });
+      return;
+    }
     const query = availabilitySearchSchema.parse(req.query);
     const reservedTableIds = Array.isArray(req.body.reservedTableIds)
       ? (req.body.reservedTableIds as string[])

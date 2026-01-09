@@ -110,18 +110,28 @@ export function SearchPage() {
       return;
     }
 
-    const result = await dispatch(
-      createReservation({
-        restaurantId: searchCriteria.restaurantId,
-        tableIds: selectedTables.map(t => t.tableId),
-        reservationDate: searchCriteria.date,
-        reservationTime: searchCriteria.time,
-        partySize: searchCriteria.partySize,
-        customerName: reservationDetails.customerName.trim(),
-        customerPhone: reservationDetails.customerPhone.trim(),
-        specialRequests: reservationDetails.specialRequests || undefined,
-      })
-    );
+    const reservationData: {
+      restaurantId: string;
+      tableIds: string[];
+      reservationDate: string;
+      reservationTime: string;
+      partySize: number;
+      customerName: string;
+      customerPhone: string;
+      specialRequests?: string;
+    } = {
+      restaurantId: searchCriteria.restaurantId,
+      tableIds: selectedTables.map(t => t.tableId),
+      reservationDate: searchCriteria.date,
+      reservationTime: searchCriteria.time,
+      partySize: searchCriteria.partySize,
+      customerName: reservationDetails.customerName.trim(),
+      customerPhone: reservationDetails.customerPhone.trim(),
+    };
+    if (reservationDetails.specialRequests) {
+      reservationData.specialRequests = reservationDetails.specialRequests;
+    }
+    const result = await dispatch(createReservation(reservationData));
 
     if (createReservation.fulfilled.match(result)) {
       toast.success('Reservation created successfully');
@@ -348,7 +358,7 @@ export function SearchPage() {
                 variant="secondary"
                 onClick={() => {
                   setShowReservationForm(false);
-                  setSelectedTable(null);
+                  setSelectedTables([]);
                 }}
                 className="flex-1"
               >

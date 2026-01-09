@@ -1,0 +1,38 @@
+# Development Dockerfile for Reservation Service
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install tsx globally for hot reload
+RUN npm install -g tsx
+
+# Copy root package files
+COPY package.json package-lock.json ./
+COPY tsconfig.base.json ./
+
+# Copy shared package
+COPY packages/shared/package.json packages/shared/
+COPY packages/shared/tsconfig.json packages/shared/
+COPY packages/shared/src packages/shared/src
+
+# Copy reservation-service package files
+COPY packages/reservation-service/package.json packages/reservation-service/
+COPY packages/reservation-service/tsconfig.json packages/reservation-service/
+
+# Install all dependencies (including dev)
+WORKDIR /app
+RUN npm ci
+
+# Build shared package
+WORKDIR /app/packages/shared
+RUN npm run build
+
+# Generate Prisma client
+WORKDIR /app/packages/reservation-service
+RUN npx prisma generate
+
+WORKDIR /app/packages/reservation-service
+
+EXPOSE 3002
+
+CMD ["npm", "run", "dev"]

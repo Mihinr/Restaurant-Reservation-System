@@ -1,0 +1,38 @@
+# Development Dockerfile for User Service
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Install tsx globally for hot reload
+RUN npm install -g tsx
+
+# Copy root package files
+COPY package.json package-lock.json ./
+COPY tsconfig.base.json ./
+
+# Copy shared package
+COPY packages/shared/package.json packages/shared/
+COPY packages/shared/tsconfig.json packages/shared/
+COPY packages/shared/src packages/shared/src
+
+# Copy user-service package files
+COPY packages/user-service/package.json packages/user-service/
+COPY packages/user-service/tsconfig.json packages/user-service/
+
+# Install all dependencies (including dev)
+WORKDIR /app
+RUN npm ci
+
+# Build shared package
+WORKDIR /app/packages/shared
+RUN npm run build
+
+# Generate Prisma client
+WORKDIR /app/packages/user-service
+RUN npx prisma generate
+
+WORKDIR /app/packages/user-service
+
+EXPOSE 3001
+
+CMD ["npm", "run", "dev"]

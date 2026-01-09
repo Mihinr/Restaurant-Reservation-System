@@ -1,4 +1,6 @@
-import { PrismaClient, Restaurant } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+
+type Restaurant = Prisma.RestaurantGetPayload<{}>;
 import { CreateRestaurantDto, UpdateRestaurantDto } from '@restaurant-reservation/shared';
 
 export class RestaurantRepository {
@@ -19,11 +21,11 @@ export class RestaurantRepository {
         city: data.city,
         state: data.state,
         zipCode: data.zipCode,
-        phone: data.phone,
-        email: data.email,
+        phone: data.phone ?? null,
+        email: data.email ?? null,
         timezone: data.timezone || 'America/New_York',
-        openingTime: data.openingTime || '11:00:00',
-        closingTime: data.closingTime || '22:00:00',
+        openingTime: data.openingTime ? new Date(data.openingTime) : new Date('1970-01-01T11:00:00Z'),
+        closingTime: data.closingTime ? new Date(data.closingTime) : new Date('1970-01-01T22:00:00Z'),
       },
     });
   }
@@ -59,22 +61,42 @@ export class RestaurantRepository {
   }
 
   async update(id: string, data: UpdateRestaurantDto): Promise<Restaurant> {
+    const updateData: {
+      name?: string;
+      address?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+      phone?: string | null;
+      email?: string | null;
+      timezone?: string;
+      openingTime?: Date;
+      closingTime?: Date;
+      isActive?: boolean;
+      updatedAt: Date;
+    } = {
+      updatedAt: new Date(),
+    };
+
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.address !== undefined) updateData.address = data.address;
+    if (data.city !== undefined) updateData.city = data.city;
+    if (data.state !== undefined) updateData.state = data.state;
+    if (data.zipCode !== undefined) updateData.zipCode = data.zipCode;
+    if (data.phone !== undefined) updateData.phone = data.phone ?? null;
+    if (data.email !== undefined) updateData.email = data.email ?? null;
+    if (data.timezone !== undefined) updateData.timezone = data.timezone;
+    if (data.openingTime !== undefined) {
+      updateData.openingTime = new Date(data.openingTime);
+    }
+    if (data.closingTime !== undefined) {
+      updateData.closingTime = new Date(data.closingTime);
+    }
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+
     return this.prisma.restaurant.update({
       where: { id },
-      data: {
-        name: data.name,
-        address: data.address,
-        city: data.city,
-        state: data.state,
-        zipCode: data.zipCode,
-        phone: data.phone,
-        email: data.email,
-        timezone: data.timezone,
-        openingTime: data.openingTime,
-        closingTime: data.closingTime,
-        isActive: data.isActive,
-        updatedAt: new Date(),
-      },
+      data: updateData,
     });
   }
 

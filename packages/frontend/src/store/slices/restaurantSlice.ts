@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { restaurantService } from '../../services/restaurantService';
 import { Restaurant, TableAvailability, SearchCriteria } from '@restaurant-reservation/shared';
 
-interface RestaurantState {
+export interface RestaurantState {
   restaurants: Restaurant[];
   selectedRestaurant: Restaurant | null;
   availableTables: TableAvailability[];
@@ -20,7 +20,7 @@ const initialState: RestaurantState = {
 
 export const fetchRestaurants = createAsyncThunk(
   'restaurant/fetchRestaurants',
-  async (filters?: { city?: string; state?: string }, { rejectWithValue }) => {
+  async (filters: { city?: string; state?: string } | undefined, { rejectWithValue }) => {
     try {
       const response = await restaurantService.getRestaurants(filters);
       return response.data;

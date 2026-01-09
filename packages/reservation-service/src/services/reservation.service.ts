@@ -29,7 +29,9 @@ export class ReservationService {
     if (tableIds.length > 0) {
       // Check for conflicting reservations (active ones only)
       const reservationDate = new Date(data.reservationDate);
-      const [hours, minutes] = data.reservationTime.split(':').map(Number);
+      const timeParts = data.reservationTime.split(':').map(Number);
+      const hours = timeParts[0] ?? 0;
+      const minutes = timeParts[1] ?? 0;
       const reservationTime = new Date();
       reservationTime.setHours(hours, minutes, 0, 0);
       
@@ -48,14 +50,16 @@ export class ReservationService {
     const reservationNumber = generateReservationNumber();
 
     try {
-      const reservation = await this.prisma.$transaction(async (tx) => {
+      const reservation = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         const repo = new ReservationRepository(tx as unknown as PrismaClient);
         
         // Before creating, check if there are cancelled reservations at these exact time slots
         // and delete them to free up the slots
         if (tableIds.length > 0) {
           const reservationDate = new Date(data.reservationDate);
-          const [hours, minutes] = data.reservationTime.split(':').map(Number);
+          const timeParts = data.reservationTime.split(':').map(Number);
+          const hours = timeParts[0] ?? 0;
+          const minutes = timeParts[1] ?? 0;
           const reservationTime = new Date();
           reservationTime.setHours(hours, minutes, 0, 0);
           
@@ -86,7 +90,7 @@ export class ReservationService {
           for (const cancelledReservation of cancelledReservations) {
             const cancelledTableIds = [
               ...(cancelledReservation.tableId ? [cancelledReservation.tableId] : []),
-              ...cancelledReservation.tables.map(rt => rt.tableId),
+              ...cancelledReservation.tables.map((rt: { tableId: string }) => rt.tableId),
             ];
             
             // If all tables in the cancelled reservation are in our tableIds, delete it
@@ -106,15 +110,17 @@ export class ReservationService {
       });
 
       const enriched = await this.enrichReservationsWithExternalData([reservation]);
+      if (!enriched[0]) {
+        throw new Error('Failed to enrich reservation');
+      }
       return enriched[0];
-    } catch (error) {
+    } catch (error: unknown) {
       // Handle Prisma unique constraint errors (though we shouldn't hit this with the new schema)
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          const target = error.meta?.target as string[] | undefined;
-          if (target && target.includes('reservationNumber')) {
-            throw new ConflictError('A reservation with this number already exists. Please try again.');
-          }
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+        const prismaError = error as Prisma.PrismaClientKnownRequestError;
+        const target = prismaError.meta?.target as string[] | undefined;
+        if (target && target.includes('reservationNumber')) {
+          throw new ConflictError('A reservation with this number already exists. Please try again.');
         }
       }
       // Re-throw other errors
@@ -128,6 +134,9 @@ export class ReservationService {
       throw new NotFoundError('Reservation not found');
     }
     const enriched = await this.enrichReservationsWithExternalData([reservation]);
+    if (!enriched[0]) {
+      throw new NotFoundError('Reservation not found');
+    }
     return enriched[0];
   }
 
@@ -156,17 +165,19 @@ export class ReservationService {
     }
 
     // Get tableIds from either tableIds array or legacy tableId field
-    const tableIds = data.tableIds || (data.tableId ? [data.tableId] : undefined);
+    const tableIds: string[] = data.tableIds || (data.tableId ? [data.tableId] : []);
 
-    const updated = await this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const repo = new ReservationRepository(tx as unknown as PrismaClient);
 
       // Check for conflicts if tables or time are being updated
-      if (tableIds && tableIds.length > 0 && (data.reservationDate || data.reservationTime)) {
+      if (tableIds.length > 0 && (data.reservationDate || data.reservationTime)) {
         const reservationDate = data.reservationDate ? new Date(data.reservationDate) : existing.reservationDate;
         const reservationTime = data.reservationTime 
           ? (() => {
-              const [hours, minutes] = data.reservationTime.split(':').map(Number);
+              const timeParts = data.reservationTime.split(':').map(Number);
+              const hours = timeParts[0] ?? 0;
+              const minutes = timeParts[1] ?? 0;
               const time = new Date();
               time.setHours(hours, minutes, 0, 0);
               return time;
@@ -191,6 +202,9 @@ export class ReservationService {
     });
 
     const enriched = await this.enrichReservationsWithExternalData([updated]);
+    if (!enriched[0]) {
+      throw new Error('Failed to enrich updated reservation');
+    }
     return enriched[0];
   }
 
@@ -200,10 +214,17 @@ export class ReservationService {
       throw new NotFoundError('Reservation not found');
     }
 
-    // Check if the table exists in this reservation
+    // Get all table IDs for this reservation - need to query with tables relation
+    const reservationWithTables = await this.prisma.reservation.findUnique({
+      where: { id: reservationId },
+      include: { tables: true },
+    });
+    if (!reservationWithTables) {
+      throw new NotFoundError('Reservation not found');
+    }
     const tableIds = [
-      ...(reservation.tableId ? [reservation.tableId] : []),
-      ...reservation.tables.map(rt => rt.tableId),
+      ...(reservationWithTables.tableId ? [reservationWithTables.tableId] : []),
+      ...reservationWithTables.tables.map((rt: { tableId: string }) => rt.tableId),
     ];
 
     if (!tableIds.includes(tableId)) {
@@ -217,6 +238,9 @@ export class ReservationService {
 
     const updated = await this.reservationRepository.removeTableFromReservation(reservationId, tableId);
     const enriched = await this.enrichReservationsWithExternalData([updated]);
+    if (!enriched[0]) {
+      throw new Error('Failed to enrich updated reservation');
+    }
     return enriched[0];
   }
 
@@ -240,7 +264,9 @@ export class ReservationService {
     duration: number = 90
   ): Promise<string[]> {
     const reservationDate = new Date(date);
-    const [hours, minutes] = time.split(':').map(Number);
+    const timeParts = time.split(':').map(Number);
+    const hours = timeParts[0] ?? 0;
+    const minutes = timeParts[1] ?? 0;
     const reservationTime = new Date();
     reservationTime.setHours(hours, minutes, 0, 0);
 
@@ -346,18 +372,19 @@ export class ReservationService {
         }
       });
       
-      // Set tableIds and tableNumbers arrays
-      baseReservation.tableIds = tableIds.length > 0 ? tableIds : undefined;
-      baseReservation.tableNumbers = tableNumbers.length > 0 ? tableNumbers : undefined;
+      // Set tableIds and tableNumbers arrays - only set if arrays have items
+      if (tableIds.length > 0) {
+        baseReservation.tableIds = tableIds;
+        baseReservation.tableNumbers = tableNumbers;
+      }
       
       // Keep backward compatibility: set single tableId and tableNumber
       if (tableIds.length === 1) {
-        baseReservation.tableId = tableIds[0];
-        baseReservation.tableNumber = tableNumbers[0];
+        baseReservation.tableId = tableIds[0]!;
+        baseReservation.tableNumber = tableNumbers[0]!;
       } else if (tableIds.length > 1) {
-        // Multiple tables: don't set single tableId/tableNumber
-        baseReservation.tableId = undefined;
-        baseReservation.tableNumber = undefined;
+        // Multiple tables: don't set single tableId/tableNumber - omit the property
+        // Properties are already not set, so no action needed
       }
       
       return baseReservation;
@@ -497,22 +524,21 @@ export class ReservationService {
     createdAt: Date;
     updatedAt: Date;
   }): ReservationType {
-    const timeStr = reservation.reservationTime.toTimeString().substring(0, 5);
     return {
       id: reservation.id,
       reservationNumber: reservation.reservationNumber,
       userId: reservation.userId,
       restaurantId: reservation.restaurantId,
-      tableId: reservation.tableId || undefined,
+      ...(reservation.tableId ? { tableId: reservation.tableId } : {}),
       partySize: reservation.partySize,
       reservationDate: reservation.reservationDate,
       reservationTime: reservation.reservationTime,
       durationMinutes: reservation.durationMinutes,
       status: reservation.status as ReservationType['status'],
       statusUpdatedAt: reservation.statusUpdatedAt,
-      customerName: reservation.customerName || undefined,
-      customerPhone: reservation.customerPhone || undefined,
-      specialRequests: reservation.specialRequests || undefined,
+      ...(reservation.customerName ? { customerName: reservation.customerName } : {}),
+      ...(reservation.customerPhone ? { customerPhone: reservation.customerPhone } : {}),
+      ...(reservation.specialRequests ? { specialRequests: reservation.specialRequests } : {}),
       version: reservation.version,
       createdAt: reservation.createdAt,
       updatedAt: reservation.updatedAt,

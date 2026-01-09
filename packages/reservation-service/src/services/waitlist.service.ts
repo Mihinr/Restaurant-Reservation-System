@@ -6,8 +6,8 @@ import { NotFoundError } from '../errors/AppError';
 export class WaitlistService {
   private waitlistRepository: WaitlistRepository;
 
-  constructor(private prisma: PrismaClient) {
-    this.waitlistRepository = new WaitlistRepository(prisma);
+  constructor(_prisma: PrismaClient) {
+    this.waitlistRepository = new WaitlistRepository(_prisma);
   }
 
   async joinWaitlist(userId: string, data: CreateWaitlistEntryDto): Promise<WaitlistEntryType> {
@@ -82,7 +82,7 @@ export class WaitlistService {
       name: entry.name,
       status: entry.status as WaitlistEntryType['status'],
       position: entry.position,
-      estimatedWaitTime: entry.estimatedWaitTime || undefined,
+      ...(entry.estimatedWaitTime !== null ? { estimatedWaitTime: entry.estimatedWaitTime } : {}),
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
     };
