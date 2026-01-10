@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../errors/AppError';
 import { logger } from '../config/logger';
 import { ZodError } from 'zod';
-import { Prisma } from '@prisma/client';
+
 
 export function errorHandler(
   err: Error,
@@ -30,7 +30,7 @@ export function errorHandler(
   // Handle Prisma unique constraint errors
   if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
     // Unique constraint violation
-    const prismaError = err as Prisma.PrismaClientKnownRequestError;
+    const prismaError = err as any; // Fallback to any since IDE has issues with Prisma namespace member mapping
     const target = prismaError.meta?.target as string[] | undefined;
     let message = 'A record with this information already exists';
     

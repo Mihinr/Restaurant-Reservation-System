@@ -6,7 +6,7 @@ import { validate } from '../middlewares/validate.middleware';
 import { createTableSchema, updateTableSchema, batchTableSchema } from '../validators/table.validator';
 
 export function createTableRoutes(prisma: PrismaClient): Router {
-  const router = Router();
+  const router = Router({ mergeParams: true });
   const tableService = new TableService(prisma);
   const tableController = new TableController(tableService);
 
@@ -16,6 +16,10 @@ export function createTableRoutes(prisma: PrismaClient): Router {
 
   router.post('/batch', validate(batchTableSchema), (req, res, next) => {
     tableController.getBatch(req, res).catch(next);
+  });
+
+  router.get('/', (req, res, next) => {
+    tableController.getByRestaurant(req, res).catch(next);
   });
 
   router.get('/:id', (req, res, next) => {

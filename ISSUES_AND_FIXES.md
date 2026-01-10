@@ -100,3 +100,15 @@
 **Fix(solution/action):** Updated Dockerfile CMD in all three services from `CMD ["node", "dist/server.js"]` to `CMD ["node", "dist/src/server.js"]`. This matches the new output structure where source files compile to `dist/src/` directory.
 
 ---
+
+## 9. Integration Tests Wiping Development Database
+
+**Error:** Running integration tests (`npm run test:integration`) deleted all data (restaurants, tables, users) from the development database.
+
+**Impact:** Development data was lost, requiring manual re-seeding to continue work. Frontend and APIs showed no data after tests were run.
+
+**Root cause:** Integration tests for `reservation-service` and `table-service` used `prisma.model.deleteMany()` in `beforeAll` and `afterAll` hooks to ensure a clean test environment. Both the development environment and the tests were using the same `DATABASE_URL` from the `.env` file because a separate `TEST_DATABASE_URL` was not configured or forced in the test setup.
+
+**Fix(solution/action):** Restored missing data by running the seed script: `npx tsx prisma/seed.ts` (or `npm run db:seed`). To prevent future occurrences, it is recommended to define a `TEST_DATABASE_URL` in the environment that points to a dedicated test database, or use a separate `.env.test` file for integration testing.
+
+---

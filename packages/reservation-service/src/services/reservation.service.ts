@@ -130,8 +130,8 @@ export class ReservationService {
       return enriched[0];
     } catch (error: unknown) {
       // Handle Prisma unique constraint errors (though we shouldn't hit this with the new schema)
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
-        const prismaError = error as Prisma.PrismaClientKnownRequestError;
+      if (error && typeof error === 'object' && (error as any).code === 'P2002') {
+        const prismaError = error as any; // Fallback to any since IDE has issues with Prisma namespace member mapping
         const target = prismaError.meta?.target as string[] | undefined;
         if (target && target.includes('reservationNumber')) {
           throw new ConflictError('A reservation with this number already exists. Please try again.');
@@ -185,7 +185,7 @@ export class ReservationService {
       const repo = new ReservationRepository(tx as unknown as PrismaClient);
 
       // Check for conflicts if tables or time are being updated
-      if (tableIds.length > 0 && (data.reservationDate || data.reservationTime)) {
+      if (data.reservationDate || data.reservationTime || tableIds.length > 0) {
         const reservationDate = data.reservationDate ? new Date(data.reservationDate) : existing.reservationDate;
         const reservationTime = data.reservationTime 
           ? (() => {
@@ -198,17 +198,27 @@ export class ReservationService {
             })()
           : existing.reservationTime;
 
-        const conflicting = await repo.findConflictingReservations(
-          tableIds,
-          reservationDate,
-          reservationTime,
-          90
-        );
+        // Use new tableIds or existing ones
+        const currentTableIds = tableIds.length > 0 
+          ? tableIds 
+          : [
+              ...(existing.tableId ? [existing.tableId] : []),
+              ...((existing as any).tables?.map((t: any) => t.tableId) || [])
+            ];
 
-        // Filter out the current reservation from conflicts
-        const otherConflicts = conflicting.filter(c => c.id !== id);
-        if (otherConflicts.length > 0) {
-          throw new ConflictError('One or more tables are already reserved for the selected date and time');
+        if (currentTableIds.length > 0) {
+          const conflicting = await repo.findConflictingReservations(
+            currentTableIds,
+            reservationDate,
+            reservationTime,
+            90
+          );
+
+          // Filter out the current reservation from conflicts
+          const otherConflicts = conflicting.filter(c => c.id !== id);
+          if (otherConflicts.length > 0) {
+            throw new ConflictError('One or more tables are already reserved for the selected date and time');
+          }
         }
       }
 

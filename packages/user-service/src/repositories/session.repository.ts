@@ -1,13 +1,13 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 
 type UserSession = Prisma.UserSessionGetPayload<{}>;
-import { hashPassword } from '../utils/password';
+import { hashToken } from '../utils/token.hash';
 
 export class SessionRepository {
   constructor(private prisma: PrismaClient) {}
 
   async create(userId: string, token: string, expiresAt: Date): Promise<UserSession> {
-    const tokenHash = await hashPassword(token);
+    const tokenHash = hashToken(token);
     return this.prisma.userSession.create({
       data: {
         userId,

@@ -9,7 +9,7 @@ import {
 } from '../utils/jwt';
 import { LoginCredentials, AuthResponse, CreateUserDto, UserRole } from '@restaurant-reservation/shared';
 import { UnauthorizedError } from '../errors/AppError';
-import { hashPassword } from '../utils/password';
+import { hashToken } from '../utils/token.hash';
 
 export class AuthService {
   private userService: UserService;
@@ -92,7 +92,7 @@ export class AuthService {
     try {
       const payload = verifyRefreshToken(refreshToken);
 
-      const tokenHash = await hashPassword(refreshToken);
+      const tokenHash = hashToken(refreshToken);
       const session = await this.sessionRepository.findByTokenHash(tokenHash);
 
       if (!session || session.userId !== payload.userId) {
