@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { authService } from '../../services/authService';
+import { getErrorMessage } from '../../utils/apiError';
 import { User, LoginCredentials } from '@restaurant-reservation/shared';
 
 export interface AuthState {
@@ -31,17 +32,7 @@ export const login = createAsyncThunk(
       const response = await authService.login(credentials);
       return response.data;
     } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
-        const errorMessage = axiosError.response?.data?.message || 
-                            axiosError.response?.data?.error || 
-                            'Login failed';
-        return rejectWithValue(errorMessage);
-      }
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Login failed');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );
@@ -59,17 +50,7 @@ export const register = createAsyncThunk(
       const response = await authService.register(data);
       return response.data;
     } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
-        const errorMessage = axiosError.response?.data?.message || 
-                            axiosError.response?.data?.error || 
-                            'Registration failed';
-        return rejectWithValue(errorMessage);
-      }
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Registration failed');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );

@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { waitlistService } from '../../services/waitlistService';
+import { getErrorMessage } from '../../utils/apiError';
 import { WaitlistEntry, CreateWaitlistEntryDto } from '@restaurant-reservation/shared';
 
 export interface WaitlistState {
@@ -25,18 +26,7 @@ export const joinWaitlist = createAsyncThunk(
       const response = await waitlistService.joinWaitlist(data);
       return response.data;
     } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
-        const errorMessage =
-          axiosError.response?.data?.message ||
-          axiosError.response?.data?.error ||
-          'Failed to join waitlist';
-        return rejectWithValue(errorMessage);
-      }
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Failed to join waitlist');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );
@@ -48,10 +38,7 @@ export const fetchWaitlistByRestaurant = createAsyncThunk(
       const response = await waitlistService.getWaitlistByRestaurant(restaurantId);
       return response.data;
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Failed to fetch waitlist');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );
@@ -63,10 +50,7 @@ export const fetchMyWaitlist = createAsyncThunk(
       const response = await waitlistService.getMyWaitlist();
       return response.data;
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Failed to fetch waitlist');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );
@@ -81,18 +65,7 @@ export const respondToNotification = createAsyncThunk(
       const response = await waitlistService.respondToNotification(id, action);
       return response.data;
     } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
-        const errorMessage =
-          axiosError.response?.data?.message ||
-          axiosError.response?.data?.error ||
-          'Failed to respond to notification';
-        return rejectWithValue(errorMessage);
-      }
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Failed to respond to notification');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );
@@ -107,18 +80,7 @@ export const updateWaitlistStatus = createAsyncThunk(
       const response = await waitlistService.updateWaitlistStatus(id, status);
       return response.data;
     } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { data?: { error?: string; message?: string } } };
-        const errorMessage =
-          axiosError.response?.data?.message ||
-          axiosError.response?.data?.error ||
-          'Failed to update waitlist status';
-        return rejectWithValue(errorMessage);
-      }
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Failed to update waitlist status');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );
@@ -130,10 +92,7 @@ export const removeFromWaitlist = createAsyncThunk(
       await waitlistService.removeFromWaitlist(id);
       return id;
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Failed to remove from waitlist');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );

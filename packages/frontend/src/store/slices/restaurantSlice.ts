@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import axios from 'axios';
+
 import { restaurantService } from '../../services/restaurantService';
+import { getErrorMessage } from '../../utils/apiError';
 import { Restaurant, TableAvailability, SearchCriteria } from '@restaurant-reservation/shared';
 
 export interface RestaurantState {
@@ -26,10 +27,7 @@ export const fetchRestaurants = createAsyncThunk(
       const response = await restaurantService.getRestaurants(filters);
       return response.data;
     } catch (error: unknown) {
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Failed to fetch restaurants');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );
@@ -42,13 +40,7 @@ export const searchAvailability = createAsyncThunk(
       const response = await restaurantService.searchAvailability(restaurantId, searchParams);
       return response.data;
     } catch (error: unknown) {
-      if (axios.isAxiosError(error) && error.response && error.response.data) {
-        return rejectWithValue(error.response.data.error || error.response.data.message || 'Failed to search availability');
-      }
-      if (error instanceof Error) {
-        return rejectWithValue(error.message);
-      }
-      return rejectWithValue('Failed to search availability');
+      return rejectWithValue(getErrorMessage(error));
     }
   }
 );

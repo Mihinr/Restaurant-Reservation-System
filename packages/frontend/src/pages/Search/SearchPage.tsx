@@ -102,6 +102,7 @@ export function SearchPage() {
     // Validate time if date is today
     const now = new Date();
     const todayStr = format(now, 'yyyy-MM-dd');
+
     if (searchCriteria.date === todayStr) {
       const [hoursStr = '', minutesStr = ''] = searchCriteria.time.split(':');
       const hours = parseInt(hoursStr);
@@ -120,31 +121,78 @@ export function SearchPage() {
       }
     }
 
+    const activeRestaurant = restaurants.find(r => r.id === searchCriteria.restaurantId);
+    if (activeRestaurant && activeRestaurant.openingTime && activeRestaurant.closingTime) {
+      const timeParts = searchCriteria.time.split(':').map(Number);
+      const reqHours = timeParts[0] ?? 0;
+      const reqMins = timeParts[1] ?? 0;
+
+      const openParts = activeRestaurant.openingTime.split(':').map(Number);
+      const openHours = openParts[0] ?? 0;
+      const openMins = openParts[1] ?? 0;
+
+      const closeParts = activeRestaurant.closingTime.split(':').map(Number);
+      const closeHours = closeParts[0] ?? 0;
+      const closeMins = closeParts[1] ?? 0;
+
+      const reqTimeVal = reqHours * 60 + reqMins;
+      const openTimeVal = openHours * 60 + openMins;
+      const closeTimeVal = closeHours * 60 + closeMins;
+
+      let isOpen = false;
+      if (closeTimeVal < openTimeVal) {
+        // Crosses midnight (e.g. 18:00 to 02:00)
+        isOpen = reqTimeVal >= openTimeVal || reqTimeVal < closeTimeVal;
+      } else {
+        // Standard hours (e.g. 09:00 to 22:00)
+        isOpen = reqTimeVal >= openTimeVal && reqTimeVal < closeTimeVal;
+      }
+
+      if (!isOpen) {
+        const formatTime = (time: string) => {
+          const parts = time.split(':');
+          const h = parseInt(parts[0] ?? '0');
+          const m = parseInt(parts[1] ?? '0');
+          const d = new Date();
+          d.setHours(h, m);
+          return format(d, 'h:mm a');
+        };
+        
+        toast.error(
+          `Restaurant is closed at ${formatTime(searchCriteria.time)}. Open hours: ${formatTime(activeRestaurant.openingTime)} - ${formatTime(activeRestaurant.closingTime)}`
+        );
+        return;
+      }
+    }
+
     if (searchCriteria.restaurantId) {
-      // Cast partySize to number to ensure type safety
       const criteria = {
         restaurantId: searchCriteria.restaurantId,
         date: searchCriteria.date,
         time: searchCriteria.time,
         partySize: searchCriteria.partySize
       };
-      await dispatch(searchAvailability(criteria));
+      
+      const result = await dispatch(searchAvailability(criteria));
+      
+      if (searchAvailability.fulfilled.match(result)) {
+        const tables = result.payload;
+        if (tables.length === 0) {
+          toast.error(`No tables found for a party size of ${searchCriteria.partySize}. This may exceed the maximum table capacity.`);
+        } else {
+          const hasAvailable = tables.some((t: TableAvailability) => t.available);
+          if (!hasAvailable) {
+            toast('No tables available for the selected date and time', {
+              icon: 'ℹ️',
+            });
+          }
+        }
+      }
+      
       setSelectedTables([]);
       setShowReservationForm(false);
     }
   };
-
-  useEffect(() => {
-    if (availableTables.length > 0) {
-      const hasAvailable = availableTables.some(t => t.available);
-      if (!hasAvailable) {
-        toast('No tables available for the selected date and time', {
-          icon: 'ℹ️',
-          duration: 4000,
-        });
-      }
-    }
-  }, [availableTables]);
 
   const uniqueCities = Array.from(new Set(restaurants.map((r) => r.city))).sort();
   const uniqueStates = Array.from(new Set(restaurants.map((r) => r.state))).sort();

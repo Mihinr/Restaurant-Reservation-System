@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { authService } from '../../services/authService';
 import { setUser } from '../../store/slices/authSlice';
+import { getErrorMessage } from '../../utils/apiError';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 
@@ -40,14 +41,7 @@ export function ProfilePage() {
       localStorage.setItem('user', JSON.stringify(response.data));
       toast.success('Profile updated successfully');
     } catch (err: unknown) {
-      let errorMessage = 'Failed to update profile';
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axiosError = err as { response?: { data?: { error?: string; message?: string } } };
-        errorMessage = axiosError.response?.data?.message || axiosError.response?.data?.error || errorMessage;
-      } else if (err instanceof Error) {
-        errorMessage = err.message;
-      }
-      toast.error(errorMessage);
+      toast.error(getErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
