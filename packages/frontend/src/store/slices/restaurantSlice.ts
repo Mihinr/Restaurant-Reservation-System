@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import axios from 'axios';
 import { restaurantService } from '../../services/restaurantService';
 import { Restaurant, TableAvailability, SearchCriteria } from '@restaurant-reservation/shared';
 
@@ -41,6 +42,9 @@ export const searchAvailability = createAsyncThunk(
       const response = await restaurantService.searchAvailability(restaurantId, searchParams);
       return response.data;
     } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response && error.response.data) {
+        return rejectWithValue(error.response.data.error || error.response.data.message || 'Failed to search availability');
+      }
       if (error instanceof Error) {
         return rejectWithValue(error.message);
       }
@@ -77,6 +81,7 @@ const restaurantSlice = createSlice({
       .addCase(searchAvailability.pending, (state) => {
         state.isLoading = true;
         state.error = null;
+        state.availableTables = [];
       })
       .addCase(searchAvailability.fulfilled, (state, action) => {
         state.isLoading = false;

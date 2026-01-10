@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchRestaurants, searchAvailability } from '../../store/slices/restaurantSlice';
@@ -9,14 +9,43 @@ import { Button } from '../../components/common/Button';
 import { format } from 'date-fns';
 import { TableAvailability } from '@restaurant-reservation/shared';
 
+export interface SearchCriteriaState {
+  restaurantId: string;
+  date: string;
+  time: string;
+  partySize: number;
+}
+
 export function SearchPage() {
-  const [searchCriteria, setSearchCriteria] = useState({
-    restaurantId: '',
-    date: format(new Date(), 'yyyy-MM-dd'),
-    time: '19:00',
-    partySize: 2,
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Calculate dynamic defaults
+  const getDefaults = () => {
+    const now = new Date();
+    const isLate = now.getHours() >= 22;
+    // If it's late (>= 10 PM), default to 12:00 PM next day could be an option, 
+    // but for now let's just stick to 12:00 PM if it's late, or next hour otherwise.
+    // In a real app you might increment the day if it's too late.
+    const defaultTime = isLate ? '12:00' : `${String(now.getHours() + 1).padStart(2, '0')}:00`;
+    const defaultDate = format(now, 'yyyy-MM-dd');
+
+    return { date: defaultDate, time: defaultTime };
+  };
+
+  const defaults = getDefaults();
+
+  const [searchCriteria, setSearchCriteria] = useState<SearchCriteriaState>({
+    restaurantId: searchParams.get('restaurantId') || '',
+    date: searchParams.get('date') || defaults.date,
+    time: searchParams.get('time') || defaults.time,
+    partySize: searchParams.get('partySize') ? Number(searchParams.get('partySize')) : 2,
   });
-  const [filters, setFilters] = useState({ city: '', state: '' });
+
+  const [filters, setFilters] = useState({
+    city: searchParams.get('city') || '',
+    state: searchParams.get('state') || ''
+  });
+
   const [dateError, setDateError] = useState<string | null>(null);
   const [selectedTables, setSelectedTables] = useState<TableAvailability[]>([]);
   const [reservationDetails, setReservationDetails] = useState({
@@ -28,34 +57,78 @@ export function SearchPage() {
 
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { restaurants, availableTables, isLoading } = useAppSelector((state) => state.restaurant);
+  const { restaurants, availableTables, isLoading, error: restaurantError } = useAppSelector((state) => state.restaurant);
   const { isLoading: isCreatingReservation, error: reservationError } = useAppSelector(
     (state) => state.reservation
   );
+
+  // Sync state to URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (searchCriteria.restaurantId) params.set('restaurantId', searchCriteria.restaurantId);
+    if (searchCriteria.date) params.set('date', searchCriteria.date);
+    if (searchCriteria.time) params.set('time', searchCriteria.time);
+    if (searchCriteria.partySize) params.set('partySize', searchCriteria.partySize.toString());
+    if (filters.city) params.set('city', filters.city);
+    if (filters.state) params.set('state', filters.state);
+
+    setSearchParams(params, { replace: true });
+  }, [searchCriteria, filters, setSearchParams]);
 
   useEffect(() => {
     dispatch(fetchRestaurants(filters.city || filters.state ? filters : undefined));
   }, [dispatch, filters.city, filters.state]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedDate = new Date(e.target.value);
+    const selectedDateStr = e.target.value;
+    const selectedDate = new Date(selectedDateStr);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    selectedDate.setHours(0, 0, 0, 0);
+    // Use UTC date for comparison to avoid timezone issues with input type="date"
+    const selectedDateUtc = new Date(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth(), selectedDate.getUTCDate());
 
-    if (selectedDate < today) {
+    if (selectedDateUtc < today) {
       setDateError('Date must be today or in the future');
     } else {
       setDateError(null);
-      setSearchCriteria({ ...searchCriteria, date: e.target.value });
+      setSearchCriteria({ ...searchCriteria, date: selectedDateStr });
     }
   };
 
   const handleSearch = async (e: FormEvent) => {
     e.preventDefault();
     if (dateError) return;
+
+    // Validate time if date is today
+    const now = new Date();
+    const todayStr = format(now, 'yyyy-MM-dd');
+    if (searchCriteria.date === todayStr) {
+      const [hoursStr = '', minutesStr = ''] = searchCriteria.time.split(':');
+      const hours = parseInt(hoursStr);
+      const minutes = parseInt(minutesStr);
+
+      if (isNaN(hours) || isNaN(minutes)) {
+        return;
+      }
+
+      const selectedTime = new Date(now);
+      selectedTime.setHours(hours, minutes, 0, 0);
+
+      if (selectedTime <= now) {
+        toast.error('Please select a future time');
+        return;
+      }
+    }
+
     if (searchCriteria.restaurantId) {
-      await dispatch(searchAvailability({ ...searchCriteria, restaurantId: searchCriteria.restaurantId }));
+      // Cast partySize to number to ensure type safety
+      const criteria = {
+        restaurantId: searchCriteria.restaurantId,
+        date: searchCriteria.date,
+        time: searchCriteria.time,
+        partySize: searchCriteria.partySize
+      };
+      await dispatch(searchAvailability(criteria));
       setSelectedTables([]);
       setShowReservationForm(false);
     }
@@ -135,6 +208,8 @@ export function SearchPage() {
 
     if (createReservation.fulfilled.match(result)) {
       toast.success('Reservation created successfully');
+      // Clear URL params and state to prevent stale data
+      setSearchParams({});
       navigate('/reservation');
     }
   };
@@ -145,10 +220,16 @@ export function SearchPage() {
     }
   }, [reservationError]);
 
+  useEffect(() => {
+    if (restaurantError) {
+      toast.error(restaurantError);
+    }
+  }, [restaurantError]);
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6">
       <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Search for Available Tables</h1>
-      
+
       {/* Restaurant Filters */}
       <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-4">
         <h2 className="text-lg font-semibold mb-3">Filter Restaurants</h2>
@@ -223,9 +304,8 @@ export function SearchPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
               <input
                 type="date"
-                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base ${
-                  dateError ? 'border-red-500' : 'border-gray-300'
-                }`}
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base ${dateError ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 value={searchCriteria.date}
                 onChange={handleDateChange}
                 min={format(new Date(), 'yyyy-MM-dd')}
@@ -233,26 +313,29 @@ export function SearchPage() {
               />
               {dateError && <p className="mt-1 text-xs sm:text-sm text-red-500">{dateError}</p>}
             </div>
-          <Input
-            type="time"
-            label="Time"
-            value={searchCriteria.time}
-            onChange={(e) => setSearchCriteria({ ...searchCriteria, time: e.target.value })}
-            required
-          />
-          <Input
-            type="number"
-            label="Party Size"
-            value={searchCriteria.partySize}
-            onChange={(e) => setSearchCriteria({ ...searchCriteria, partySize: parseInt(e.target.value) })}
-            min="1"
-            required
-          />
-        </div>
-        <Button type="submit" isLoading={isLoading} className="mt-4 w-full sm:w-auto">
-          Search
-        </Button>
-      </form>
+            <Input
+              type="time"
+              label="Time"
+              value={searchCriteria.time}
+              onChange={(e) => setSearchCriteria({ ...searchCriteria, time: e.target.value })}
+              required
+            />
+            <Input
+              type="number"
+              label="Party Size"
+              value={searchCriteria.partySize}
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                setSearchCriteria({ ...searchCriteria, partySize: isNaN(val) ? 1 : val });
+              }}
+              min="1"
+              required
+            />
+          </div>
+          <Button type="submit" isLoading={isLoading} className="mt-4 w-full sm:w-auto">
+            Search
+          </Button>
+        </form>
       )}
 
       {availableTables.length > 0 && (
@@ -276,11 +359,10 @@ export function SearchPage() {
                 return (
                   <div
                     key={table.tableId}
-                    className={`bg-white p-4 rounded-lg shadow-md cursor-pointer transition-all border-2 ${
-                      isSelected
-                        ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50'
-                        : 'border-transparent hover:shadow-lg hover:border-gray-300'
-                    }`}
+                    className={`bg-white p-4 rounded-lg shadow-md cursor-pointer transition-all border-2 ${isSelected
+                      ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-50'
+                      : 'border-transparent hover:shadow-lg hover:border-gray-300'
+                      }`}
                     onClick={() => handleTableSelect(table)}
                   >
                     <div className="flex items-start gap-3">
