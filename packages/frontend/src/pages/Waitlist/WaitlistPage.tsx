@@ -5,7 +5,9 @@ import { fetchRestaurants } from '../../store/slices/restaurantSlice';
 import { joinWaitlist, fetchWaitlistByRestaurant, fetchMyWaitlist } from '../../store/slices/waitlistSlice';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
-import { isStaffOrAdmin } from '@restaurant-reservation/shared';
+import { isStaffOrAdmin, SocketEvents } from '@restaurant-reservation/shared';
+import { useSocket } from '../../context/SocketContext';
+
 
 export function WaitlistPage() {
   const [selectedRestaurantId, setSelectedRestaurantId] = useState('');
@@ -82,11 +84,38 @@ export function WaitlistPage() {
     }
   };
 
+  const { socket } = useSocket();
+
   useEffect(() => {
     if (error) {
       toast.error(error);
     }
   }, [error]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleWaitlistChange = () => {
+      // Refresh waitlist based on role/context
+      if (isStaff && selectedRestaurantId) {
+        dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
+      } else if (!isStaff && user) {
+        // For customers, refresh their list to show new position/status
+        dispatch(fetchMyWaitlist());
+      }
+    };
+
+    socket.on(SocketEvents.WAITLIST_JOINED, handleWaitlistChange);
+    socket.on(SocketEvents.WAITLIST_UPDATED, handleWaitlistChange);
+    socket.on(SocketEvents.WAITLIST_REMOVED, handleWaitlistChange);
+
+    return () => {
+      socket.off(SocketEvents.WAITLIST_JOINED, handleWaitlistChange);
+      socket.off(SocketEvents.WAITLIST_UPDATED, handleWaitlistChange);
+      socket.off(SocketEvents.WAITLIST_REMOVED, handleWaitlistChange);
+    };
+  }, [socket, dispatch, isStaff, selectedRestaurantId, user]);
+
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6">

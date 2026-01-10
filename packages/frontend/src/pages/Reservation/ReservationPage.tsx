@@ -12,6 +12,8 @@ import { Button } from '../../components/common/Button';
 import { format } from 'date-fns';
 import { Reservation } from '@restaurant-reservation/shared';
 import { restaurantService } from '../../services/restaurantService';
+import { SocketEvents } from '@restaurant-reservation/shared';
+import { useSocket } from '../../context/SocketContext';
 
 type TabType = 'current' | 'past';
 
@@ -29,9 +31,31 @@ export function ReservationPage() {
     specialRequests: '',
   });
 
+  const { socket } = useSocket();
+
   useEffect(() => {
     dispatch(fetchReservations());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleReservationChange = (_data: any) => {
+      // We could check if data.userId === currentUser.id, but fetching again is safe
+      dispatch(fetchReservations());
+      toast.success('Your reservations have been updated');
+    };
+
+    socket.on(SocketEvents.RESERVATION_CREATED, handleReservationChange);
+    socket.on(SocketEvents.RESERVATION_UPDATED, handleReservationChange);
+    socket.on(SocketEvents.RESERVATION_CANCELLED, handleReservationChange);
+
+    return () => {
+      socket.off(SocketEvents.RESERVATION_CREATED, handleReservationChange);
+      socket.off(SocketEvents.RESERVATION_UPDATED, handleReservationChange);
+      socket.off(SocketEvents.RESERVATION_CANCELLED, handleReservationChange);
+    };
+  }, [socket, dispatch]);
 
   useEffect(() => {
     if (error) {

@@ -10,6 +10,8 @@ import { generateReservationNumber } from '../utils/reservationNumber';
 import { getEnvConfig } from '../config/env';
 import { logger } from '../config/logger';
 import axios from 'axios';
+import { getIO } from '../socket';
+import { SocketEvents } from '@restaurant-reservation/shared';
 
 export class ReservationService {
   private reservationRepository: ReservationRepository;
@@ -113,6 +115,18 @@ export class ReservationService {
       if (!enriched[0]) {
         throw new Error('Failed to enrich reservation');
       }
+      
+      try {
+        const io = getIO();
+        io.emit(SocketEvents.RESERVATION_CREATED, enriched[0]);
+        io.emit(SocketEvents.TABLE_AVAILABILITY_CHANGED, {
+          restaurantId: enriched[0].restaurantId,
+          date: enriched[0].reservationDate,
+        });
+      } catch (error) {
+        logger.error('Failed to emit socket events:', error);
+      }
+
       return enriched[0];
     } catch (error: unknown) {
       // Handle Prisma unique constraint errors (though we shouldn't hit this with the new schema)
@@ -205,6 +219,18 @@ export class ReservationService {
     if (!enriched[0]) {
       throw new Error('Failed to enrich updated reservation');
     }
+
+    try {
+      const io = getIO();
+      io.emit(SocketEvents.RESERVATION_UPDATED, enriched[0]);
+      io.emit(SocketEvents.TABLE_AVAILABILITY_CHANGED, {
+        restaurantId: enriched[0].restaurantId,
+        date: enriched[0].reservationDate,
+      });
+    } catch (error) {
+      logger.error('Failed to emit socket events:', error);
+    }
+
     return enriched[0];
   }
 
@@ -241,6 +267,18 @@ export class ReservationService {
     if (!enriched[0]) {
       throw new Error('Failed to enrich updated reservation');
     }
+
+    try {
+      const io = getIO();
+      io.emit(SocketEvents.RESERVATION_UPDATED, enriched[0]);
+      io.emit(SocketEvents.TABLE_AVAILABILITY_CHANGED, {
+        restaurantId: enriched[0].restaurantId,
+        date: enriched[0].reservationDate,
+      });
+    } catch (error) {
+      logger.error('Failed to emit socket events:', error);
+    }
+
     return enriched[0];
   }
 
@@ -255,6 +293,18 @@ export class ReservationService {
     }
 
     await this.reservationRepository.delete(id);
+
+    try {
+      const io = getIO();
+      // Emit the reservation with updated status (simulated as we don't fetch it back)
+      io.emit(SocketEvents.RESERVATION_CANCELLED, { ...reservation, status: 'CANCELLED' });
+      io.emit(SocketEvents.TABLE_AVAILABILITY_CHANGED, {
+        restaurantId: reservation.restaurantId,
+        date: reservation.reservationDate,
+      });
+    } catch (error) {
+      logger.error('Failed to emit socket events:', error);
+    }
   }
 
   async getReservedTableIds(

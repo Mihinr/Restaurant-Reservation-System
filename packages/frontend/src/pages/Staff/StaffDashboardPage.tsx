@@ -15,9 +15,10 @@ import {
 } from '../../store/slices/reservationSlice';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
-import { WaitlistEntry, isStaffOrAdmin, Reservation } from '@restaurant-reservation/shared';
+import { WaitlistEntry, isStaffOrAdmin, Reservation, SocketEvents } from '@restaurant-reservation/shared';
 import { format, isToday } from 'date-fns';
 import { restaurantService } from '../../services/restaurantService';
+import { useSocket } from '../../context/SocketContext';
 import { FormEvent } from 'react';
 
 type TabType = 'current' | 'past';
@@ -173,6 +174,44 @@ export function StaffDashboardPage() {
       dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
     }
   }, [dispatch, selectedRestaurantId]);
+
+  // Real-time updates
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleReservationChange = (_data: any) => {
+      // Refresh reservations if the change is relevant (or just refresh all for simplicity/correctness)
+      toast.success('Reservation updated');
+      dispatch(fetchReservations());
+      // Waitlist might be affected if tables logic is involved, but separate event usually.
+    };
+    
+    const handleWaitlistChange = (data: any) => {
+      if (selectedRestaurantId && data.restaurantId === selectedRestaurantId) {
+         toast.success('Waitlist updated');
+         dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
+      }
+    };
+
+    socket.on(SocketEvents.RESERVATION_CREATED, handleReservationChange);
+    socket.on(SocketEvents.RESERVATION_UPDATED, handleReservationChange);
+    socket.on(SocketEvents.RESERVATION_CANCELLED, handleReservationChange);
+    socket.on(SocketEvents.WAITLIST_JOINED, handleWaitlistChange);
+    socket.on(SocketEvents.WAITLIST_UPDATED, handleWaitlistChange);
+    socket.on(SocketEvents.WAITLIST_REMOVED, handleWaitlistChange);
+
+    return () => {
+      socket.off(SocketEvents.RESERVATION_CREATED, handleReservationChange);
+      socket.off(SocketEvents.RESERVATION_UPDATED, handleReservationChange);
+      socket.off(SocketEvents.RESERVATION_CANCELLED, handleReservationChange);
+      socket.off(SocketEvents.WAITLIST_JOINED, handleWaitlistChange);
+      socket.off(SocketEvents.WAITLIST_UPDATED, handleWaitlistChange);
+      socket.off(SocketEvents.WAITLIST_REMOVED, handleWaitlistChange);
+    };
+  }, [socket, dispatch, selectedRestaurantId]);
+
 
   const handleUpdateStatus = async (entryId: string, status: WaitlistEntry['status']) => {
     const result = await dispatch(updateWaitlistStatus({ id: entryId, status }));

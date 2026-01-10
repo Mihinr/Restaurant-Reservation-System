@@ -1,7 +1,9 @@
+import http from 'http';
 import { PrismaClient } from '@prisma/client';
 import { createApp } from './app';
 import { getEnvConfig } from './config/env';
 import { logger } from './config/logger';
+import { initSocket } from './socket';
 
 const { PORT } = getEnvConfig();
 const prisma = new PrismaClient();
@@ -18,12 +20,15 @@ async function connectDatabase(): Promise<void> {
 }
 
 const app = createApp(prisma);
-let server: ReturnType<typeof app.listen> | null = null;
+const httpServer = http.createServer(app);
+initSocket(httpServer);
+
+let server: http.Server | null = null;
 
 // Connect to database before starting server
 connectDatabase()
   .then(() => {
-    server = app.listen(PORT, () => {
+    server = httpServer.listen(PORT, () => {
       logger.info(`Reservation service listening on port ${PORT}`);
     });
   })

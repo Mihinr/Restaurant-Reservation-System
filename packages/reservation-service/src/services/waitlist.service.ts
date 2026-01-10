@@ -1,7 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import { WaitlistRepository } from '../repositories/waitlist.repository';
+import { logger } from '../config/logger';
 import { CreateWaitlistEntryDto, WaitlistEntry as WaitlistEntryType } from '@restaurant-reservation/shared';
 import { NotFoundError } from '../errors/AppError';
+import { getIO } from '../socket';
+import { SocketEvents } from '@restaurant-reservation/shared';
 
 export class WaitlistService {
   private waitlistRepository: WaitlistRepository;
@@ -19,7 +22,16 @@ export class WaitlistService {
       position,
     });
 
-    return this.mapToWaitlistEntryType(entry);
+    const mappedEntry = this.mapToWaitlistEntryType(entry);
+
+    try {
+      const io = getIO();
+      io.emit(SocketEvents.WAITLIST_JOINED, mappedEntry);
+    } catch (error) {
+      logger.error('Failed to emit socket events:', error);
+    }
+
+    return mappedEntry;
   }
 
   async getWaitlistByRestaurant(restaurantId: string): Promise<WaitlistEntryType[]> {
@@ -48,7 +60,16 @@ export class WaitlistService {
     }
 
     const updated = await this.waitlistRepository.updateStatus(id, status);
-    return this.mapToWaitlistEntryType(updated);
+    const mappedEntry = this.mapToWaitlistEntryType(updated);
+
+    try {
+      const io = getIO();
+      io.emit(SocketEvents.WAITLIST_UPDATED, mappedEntry);
+    } catch (error) {
+      logger.error('Failed to emit socket events:', error);
+    }
+
+    return mappedEntry;
   }
 
   async removeFromWaitlist(id: string): Promise<void> {
@@ -58,6 +79,16 @@ export class WaitlistService {
     }
 
     await this.waitlistRepository.delete(id);
+
+    try {
+      const io = getIO();
+      // Emit minimal data needed for removal (id and restaurantId are usually enough)
+      // Since we fetched 'entry' before, we can use it.
+      const mappedEntry = this.mapToWaitlistEntryType(entry);
+      io.emit(SocketEvents.WAITLIST_REMOVED, mappedEntry);
+    } catch (error) {
+      logger.error('Failed to emit socket events:', error);
+    }
   }
 
   private mapToWaitlistEntryType(entry: {

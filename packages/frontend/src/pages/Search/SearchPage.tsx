@@ -7,9 +7,12 @@ import { createReservation } from '../../store/slices/reservationSlice';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { format } from 'date-fns';
+import { SocketEvents } from '@restaurant-reservation/shared';
+import { useSocket } from '../../context/SocketContext';
 import { TableAvailability } from '@restaurant-reservation/shared';
 
 export interface SearchCriteriaState {
+  // ... (keep interface)
   restaurantId: string;
   date: string;
   time: string;
@@ -19,16 +22,13 @@ export interface SearchCriteriaState {
 export function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // Calculate dynamic defaults
+  // ... (keep defaults)
+
   const getDefaults = () => {
     const now = new Date();
     const isLate = now.getHours() >= 22;
-    // If it's late (>= 10 PM), default to 12:00 PM next day could be an option, 
-    // but for now let's just stick to 12:00 PM if it's late, or next hour otherwise.
-    // In a real app you might increment the day if it's too late.
     const defaultTime = isLate ? '12:00' : `${String(now.getHours() + 1).padStart(2, '0')}:00`;
     const defaultDate = format(now, 'yyyy-MM-dd');
-
     return { date: defaultDate, time: defaultTime };
   };
 
@@ -61,6 +61,42 @@ export function SearchPage() {
   const { isLoading: isCreatingReservation, error: reservationError } = useAppSelector(
     (state) => state.reservation
   );
+
+  const { socket } = useSocket();
+
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleAvailabilityChange = (data: { restaurantId: string; date: string }) => {
+      // Check if the change affects our current search
+      // Note: date format from socket might need normalization if it includes time, but usually emitted as YYYY-MM-DD or ISO string
+      // Let's assume strict equality or just substring match for date
+      const isSameDate = data.date && searchCriteria.date && data.date.startsWith(searchCriteria.date);
+
+      if (
+        data.restaurantId === searchCriteria.restaurantId &&
+        isSameDate &&
+        searchCriteria.time // Ensure we have a time selected to run search
+      ) {
+         // Re-run search
+         const criteria = {
+           restaurantId: searchCriteria.restaurantId,
+           date: searchCriteria.date,
+           time: searchCriteria.time,
+           partySize: searchCriteria.partySize
+         };
+         dispatch(searchAvailability(criteria));
+         toast('Table availability updated', { icon: '🔄' });
+      }
+    };
+
+    socket.on(SocketEvents.TABLE_AVAILABILITY_CHANGED, handleAvailabilityChange);
+    
+    return () => {
+      socket.off(SocketEvents.TABLE_AVAILABILITY_CHANGED, handleAvailabilityChange);
+    };
+  }, [socket, dispatch, searchCriteria]);
+
 
   // Sync state to URL
   useEffect(() => {
