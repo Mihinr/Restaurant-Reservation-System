@@ -9,6 +9,6 @@
     }
   },
   "include": ["src/**/*", "prisma/**/*"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "exclude": ["node_modules", "dist", "**/__tests__/**", "**/*.test.ts"]
 }
 

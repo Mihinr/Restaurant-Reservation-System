@@ -112,3 +112,29 @@
 **Fix(solution/action):** Restored missing data by running the seed script: `npx tsx prisma/seed.ts` (or `npm run db:seed`). To prevent future occurrences, it is recommended to define a `TEST_DATABASE_URL` in the environment that points to a dedicated test database, or use a separate `.env.test` file for integration testing.
 
 ---
+---
+
+## 10. Docker Build Failure due to Test Files Compilation
+
+**Error:** `docker compose build` failed with `error TS2307: Cannot find module 'supertest' or its corresponding type declarations` during the `npm run build` step for microservices.
+
+**Impact:** Docker images could not be built for production. The build process failed due to missing development dependencies required by test files.
+
+**Root cause:** The TypeScript compiler (`tsc`) was configured to include all files in the `src` directory, including integration and unit tests found in `src/__tests__/**`. In the Docker build process, `npm ci` is used to install dependencies. While `npm ci` installs all dependencies (including devDependencies) in the builder stage, the `tsc` compiler was attempting to compile test files that rely on `supertest`, which were either not correctly typed or not intended for production compilation. Production builds should only compile the runtime application code.
+
+**Fix(solution/action):** Updated `tsconfig.json` for all microservices (`user-service`, `reservation-service`, and `table-service`) to explicitly exclude test files and directories from the compilation process. Added `"**/__tests__/**"` and `"**/*.test.ts"` to the `exclude` array. This ensures that only the application's runtime source code is built into the `dist` folder, preventing build failures due to test-related dependencies.
+---
+
+## 11. Frontend Runtime Error: AsyncLocalStorage is not a constructor
+
+**Error:** `Uncaught TypeError: t.AsyncLocalStorage is not a constructor` in the browser console when running the frontend.
+
+**Impact:** The frontend application crashed on load because it attempted to instantiate a Node.js-specific API (`AsyncLocalStorage`) which does not exist in the browser environment.
+
+**Root cause:** The `@restaurant-reservation/shared` package had a single entry point (`index.ts`) that exported both isomorphic code (types, DTOs) and Node.js-only infrastructure (correlation ID middleware, request context using `AsyncLocalStorage`). When the frontend imported types from the shared package, the bundler (Vite) also attempted to pull in the Node.js infrastructure, leading to the runtime failure.
+
+**Fix(solution/action):**
+1.  **Package Restructuring**: Split the shared package into two distinct layers: an isomorphic layer for pure types/DTOs and a server-only layer for Node.js infrastructure.
+2.  **Subpath Exports**: Configured `package.json` exports in the shared package to provide a dedicated `./server` entry point.
+3.  **Modern Module Resolution**: Upgraded the project to `moduleResolution: node16` and `module: node16` in `tsconfig.base.json` to support package subpath exports.
+4.  **Service Migration**: Updated all backend services to import infrastructure (like `internalHttpClient` and `correlationMiddleware`) from `@restaurant-reservation/shared/server`, while the frontend strictly imports from the root `@restaurant-reservation/shared`. This ensures Node.js APIs are never bundled into the frontend.

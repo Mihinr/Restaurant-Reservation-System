@@ -203,6 +203,16 @@ cd packages/table-service && npm run dev
 cd packages/frontend && npm run dev
 ```
 
+## API Documentation
+
+Each service provides interactive API documentation via Swagger UI. Once the services are running, you can access them at:
+
+- **User Service Docs:** [http://localhost:3001/api-docs](http://localhost:3001/api-docs)
+- **Reservation Service Docs:** [http://localhost:3002/api-docs](http://localhost:3002/api-docs)
+- **Table Service Docs:** [http://localhost:3003/api-docs](http://localhost:3003/api-docs)
+
+You can also download the JSON specification at `/api-docs.json` on each port.
+
 ## API Endpoints
 
 ### User Service (Port 3001)
@@ -275,7 +285,7 @@ restaurant-reservation-system/
 - ✅ Table Service implementation
 - ✅ Frontend implementation
 - ✅ Docker configuration
-- ⏳ Testing implementation
+- ✅ Testing & API Documentation
 
 ## License
 

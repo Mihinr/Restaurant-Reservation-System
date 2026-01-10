@@ -2,13 +2,18 @@ import express, { Express } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
+import { correlationMiddleware } from '@restaurant-reservation/shared/server';
 import { errorHandler } from './middlewares/errorHandler';
 import { createReservationRoutes } from './routes/reservation.routes';
 import { createWaitlistRoutes } from './routes/waitlist.routes';
 import { createHealthRoutes } from './routes/health.routes';
+import { setupSwagger } from './config/swagger';
 export function createApp(prisma: PrismaClient): Express {
   const app = express();
 
+  setupSwagger(app);
+
+  app.use(correlationMiddleware);
   app.use(cors());
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));

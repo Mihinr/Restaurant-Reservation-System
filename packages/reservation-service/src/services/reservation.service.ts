@@ -4,14 +4,15 @@ import {
   CreateReservationDto,
   UpdateReservationDto,
   Reservation as ReservationType,
+  SocketEvents,
 } from '@restaurant-reservation/shared';
+import { internalHttpClient } from '@restaurant-reservation/shared/server';
 import { NotFoundError, ConflictError, BadRequestError } from '../errors/AppError';
 import { generateReservationNumber } from '../utils/reservationNumber';
 import { getEnvConfig } from '../config/env';
 import { logger } from '../config/logger';
-import axios from 'axios';
+import { isAxiosError } from 'axios';
 import { getIO } from '../socket';
-import { SocketEvents } from '@restaurant-reservation/shared';
 
 export class ReservationService {
   private reservationRepository: ReservationRepository;
@@ -462,14 +463,13 @@ export class ReservationService {
     }
     
     try {
-      // Use batch endpoint - single request for all restaurants
-      const response = await axios.post<{ 
+      // Use internalHttpClient with automatic retries and timeouts
+      const response = await internalHttpClient.post<{ 
         success: boolean; 
         data: Array<{ id: string; name: string; city: string; state: string }> 
       }>(
         `${tableServiceUrl}/api/v1/restaurants/batch`,
-        { ids: restaurantIds },
-        { timeout: 5000 }
+        { ids: restaurantIds }
       );
       
       if (response.data.success && response.data.data) {
@@ -483,7 +483,7 @@ export class ReservationService {
       }
     } catch (error: unknown) {
       // Handle rate limiting specifically
-      if (axios.isAxiosError(error) && error.response?.status === 429) {
+      if (isAxiosError(error) && error.response?.status === 429) {
         const retryAfter = error.response.headers['retry-after'] || '15';
         throw new Error(
           `Rate limit exceeded when fetching restaurant details. Please try again in ${retryAfter} seconds.`
@@ -492,7 +492,7 @@ export class ReservationService {
       
       // For network errors, timeouts, or service unavailable, log and return empty map
       // This allows the reservation to be created even if enrichment fails
-      if (axios.isAxiosError(error)) {
+      if (isAxiosError(error)) {
         logger.warn('Failed to batch fetch restaurants', {
           message: error.message,
           code: error.code,
@@ -520,14 +520,13 @@ export class ReservationService {
     }
     
     try {
-      // Use batch endpoint - single request for all tables
-      const response = await axios.post<{ 
+      // Use internalHttpClient with automatic retries and timeouts
+      const response = await internalHttpClient.post<{ 
         success: boolean; 
         data: Array<{ id: string; tableNumber: string }> 
       }>(
         `${tableServiceUrl}/api/v1/tables/batch`,
-        { ids: tableIds },
-        { timeout: 5000 }
+        { ids: tableIds }
       );
       
       if (response.data.success && response.data.data) {
@@ -539,7 +538,7 @@ export class ReservationService {
       }
     } catch (error: unknown) {
       // Handle rate limiting specifically
-      if (axios.isAxiosError(error) && error.response?.status === 429) {
+      if (isAxiosError(error) && error.response?.status === 429) {
         const retryAfter = error.response.headers['retry-after'] || '15';
         throw new Error(
           `Rate limit exceeded when fetching table details. Please try again in ${retryAfter} seconds.`
@@ -548,7 +547,7 @@ export class ReservationService {
       
       // For network errors, timeouts, or service unavailable, log and return empty map
       // This allows the reservation to be created even if enrichment fails
-      if (axios.isAxiosError(error)) {
+      if (isAxiosError(error)) {
         logger.warn('Failed to batch fetch tables', {
           message: error.message,
           code: error.code,

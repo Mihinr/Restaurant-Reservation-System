@@ -1,0 +1,2 @@
+src/repositories/session.repository.ts(3,27): error TS2694: Namespace '"D:/Projects/Projects/Restaurant-Reservation-System/node_modules/.prisma/client/default".Prisma' has no exported member 'UserSessionGetPayload'.
+src/repositories/user.repository.ts(3,20): error TS2694: Namespace '"D:/Projects/Projects/Restaurant-Reservation-System/node_modules/.prisma/client/default".Prisma' has no exported member 'UserGetPayload'.

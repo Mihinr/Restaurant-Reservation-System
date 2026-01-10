@@ -1,0 +1,3 @@
+src/repositories/session.repository.ts(1,24): error TS6133: 'Prisma' is declared but its value is never read.
+src/repositories/user.repository.ts(1,24): error TS6133: 'Prisma' is declared but its value is never read.
+src/repositories/user.repository.ts(1,38): error TS6133: 'UserSession' is declared but its value is never read.

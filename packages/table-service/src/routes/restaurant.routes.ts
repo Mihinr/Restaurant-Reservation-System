@@ -5,6 +5,43 @@ import { RestaurantService } from '../services/restaurant.service';
 import { validate } from '../middlewares/validate.middleware';
 import { createRestaurantSchema, updateRestaurantSchema, batchRestaurantSchema } from '../validators/restaurant.validator';
 
+/**
+ * @openapi
+ * tags:
+ *   name: Restaurants
+ *   description: Restaurant management
+ */
+
+/**
+ * @openapi
+ * /api/v1/restaurants:
+ *   get:
+ *     summary: Get all restaurants
+ *     tags: [Restaurants]
+ *     responses:
+ *       200:
+ *         description: List of restaurants
+ */
+
+/**
+ * @openapi
+ * /api/v1/restaurants/{id}:
+ *   get:
+ *     summary: Get restaurant by ID
+ *     tags: [Restaurants]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Restaurant details
+ *       404:
+ *         description: Restaurant not found
+ */
+
 export function createRestaurantRoutes(prisma: PrismaClient): Router {
   const router = Router();
   const restaurantService = new RestaurantService(prisma);

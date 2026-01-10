@@ -6,9 +6,10 @@ import {
   Table as TableType,
   TableAvailability,
 } from '@restaurant-reservation/shared';
+import { internalHttpClient } from '@restaurant-reservation/shared/server';
 import { NotFoundError, ConflictError, BadRequestError } from '../errors/AppError';
 import { getEnvConfig } from '../config/env';
-import axios from 'axios';
+import { isAxiosError } from 'axios';
 
 export class TableService {
   private tableRepository: TableRepository;
@@ -142,17 +143,23 @@ export class TableService {
     let actualReservedTableIds: string[] = [];
     try {
       const { RESERVATION_SERVICE_URL } = getEnvConfig();
-      const response = await axios.get<{ success: boolean; data: string[] }>(
+      const response = await internalHttpClient.get<{ success: boolean; data: string[] }>(
         `${RESERVATION_SERVICE_URL}/api/v1/reservations/restaurants/${restaurantId}/reserved-tables`,
         {
-          params: { date, time, duration },
-          timeout: 5000,
+          params: { date, time, duration }
         }
       );
       actualReservedTableIds = response.data.data || [];
     } catch (error) {
-      // If reservation service is unavailable, log and continue with provided reservedTableIds
-      console.warn('Failed to fetch reserved tables from reservation service:', error);
+      if (isAxiosError(error)) {
+        console.warn('Failed to fetch reserved tables from reservation service:', {
+          message: error.message,
+          status: error.response?.status,
+          url: error.config?.url
+        });
+      } else {
+        console.warn('Failed to fetch reserved tables from reservation service:', error);
+      }
     }
 
     // Merge provided reservedTableIds with actual reserved table IDs

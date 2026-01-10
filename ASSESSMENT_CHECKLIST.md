@@ -95,8 +95,8 @@
 - ✅ **Authentication and authorization** - JWT middleware implemented
 - ✅ **Concurrent request handling** - Transactions with version field
 - ✅ **Database transactions** - Used in reservation service
-- ❌ **Retry logic for inter-service communication** - Not implemented
-- ❌ **Request correlation IDs** - Not implemented
+- ✅ **Retry logic for inter-service communication** - Centralized HttpClient with exponential backoff and idempotency checks implemented in shared package
+- ✅ **Request correlation IDs** - Implemented via AsyncLocalStorage and centralized middleware; automatically propagated in inter-service calls
 - ✅ **Rate limiting** - express-rate-limit implemented
 - ✅ **Input validation middleware** - Zod validation middleware
 
@@ -185,8 +185,8 @@
 - ✅ **Technology stack** - Listed
 - ✅ **Version requirements** - Listed
 - ✅ **Setup instructions** - Provided
-- ❌ **How to run tests** - No tests to run
-- ❌ **API documentation link** - Swagger not implemented
+- ✅ **How to run tests** - Documented in main README and individual package directories
+- ✅ **API documentation link** - Swagger UI implemented at `/api-docs` for all services (User: 3001, Res: 3002, Table: 3003)
 - ✅ **Environment variables reference** - Documented
 - ⚠️ **Troubleshooting** - Basic, could be expanded
 
