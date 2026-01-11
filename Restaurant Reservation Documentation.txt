@@ -1,0 +1,2263 @@
+Restaurant Reservation & Table Management System
+Part 1: System Design & Architecture
+Prepared by: Mihin Ratnayake
+Date: January 6, 2026
+
+1. System Overview
+The restaurant reservation system is designed to support multiple restaurant locations, manage table availability in real-time, handle walk-ins and waitlists, and coordinate staff for seating assignments. The system is built to handle high concurrency, maintain data consistency, and provide a reliable, scalable experience for both customers and staff.
+Key Goals:
+•	Real-time table availability and reservation management
+•	Prevent double-booking during concurrent requests
+•	Provide staff with real-time seating status updates
+•	Maintain customer profiles and reservation history
+•	Enable reporting on occupancy, revenue, and peak hour performance
+Chosen Tech Stack:
+•	Language: TypeScript (strict mode)
+•	Database: MySQL – chosen for its relational integrity, support for ACID transactions, and scalability with complex queries
+•	Backend: Node.js with Express
+•	Frontend: React with TypeScript (Vite for build performance)
+•	Version Control: Git with feature-branch workflow
+•	Containerization: Docker + Docker Compose for service orchestration
+Service	Responsibility	Communication
+Reservation Service	Handle table searches, bookings, modifications, cancellations, waitlist	REST APIs, asynchronous events for updates
+Restaurant Service	Manage restaurant locations, tables, and staff assignments	REST APIs, database queries, event notifications
+Customer Service	Manage customer profiles, reservation history
+	REST APIs, database queries
+
+
+Part 1: System Design & Architecture
+1.1 Service Architecture
+What services will comprise your system? (minimum 3 services required)
+
+Service Decomposition
+The system will be implemented as a microservices architecture with the following core services:
+1. User Service
+Responsibilities:
+•	User authentication and authorization (JWT token generation/validation)
+•	Customer profile management (CRUD operations)
+•	Customer preferences and history
+•	Role-based access control (Customer, Staff, Admin)
+Boundaries:
+•	Manages all user-related data
+•	Handles authentication for all other services
+•	Does NOT contain reservation or table data
+•	Publishes user events (e.g., "UserCreated", "UserUpdated")
+2. Reservation Service
+Responsibilities:
+•	Reservation lifecycle management (create, read, update, cancel)
+•	Availability checking and conflict detection
+•	Waitlist management
+•	Reservation modifications and business rules enforcement
+•	Time-based automatic expiration of pending reservations
+Boundaries:
+•	Core business logic for reservation operations
+•	Owns reservation and waitlist data
+•	Consumes table availability events
+•	Publishes reservation events for other services
+3. Table Management Service
+Responsibilities:
+•	Restaurant location and table configuration
+•	Real-time table status updates (available, occupied, reserved, maintenance)
+•	Table capacity and layout management
+•	Staff coordination for seating assignments
+•	Table search and availability calculation
+Boundaries:
+•	Owns table and restaurant location data
+•	Provides real-time availability
+•	Handles concurrent status updates
+•	Does NOT manage reservations directly
+4. Notification Service (Optional but recommended)
+Responsibilities:
+•	Email/SMS notifications for reservations
+•	Real-time updates via WebSocket
+•	Notification templates and scheduling
+•	Retry logic for failed notifications
+Service Communication Patterns
+Synchronous Communication (Request/Response)
+•	When: Immediate response required, simple CRUD operations
+•	Pattern: REST APIs with HTTP/HTTPS
+•	Examples:
+o	User login/authentication
+o	Reservation creation (with immediate confirmation)
+o	Table status queries
+Asynchronous Communication (Event-Driven)
+•	When: Decoupled operations, eventual consistency acceptable
+•	Pattern: Message Queue with RabbitMQ/Kafka
+•	Examples:
+o	Reservation created → Update analytics
+o	Table status changed → Notify frontend clients
+o	User registered → Send welcome email
+
+Communication Matrix:
+Service	Communication Method	Purpose
+Frontend → All Services	HTTP REST	Direct API calls
+Reservation → Table Service	Synchronous HTTP	Real-time availability check
+Reservation → User Service	Synchronous HTTP	Validate user exists
+All Services → Notification	Async (Message Queue)	Send notifications
+Table → Reservation	Async (Events)	Table status updates
+Reservation → Analytics	Async (Events)	Business intelligence
+
+Service Resilience and Failure Handling
+Service Resilience and Failure Handling
+Circuit Breaker Pattern
+•	Implement circuit breakers for inter-service calls
+•	Library: opossum or similar circuit breaker implementation
+•	Configuration:
+typescript
+// Example configuration
+circuitBreakerOptions = {
+  timeout: 3000, // Timeout after 3 seconds
+  errorThresholdPercentage: 50, // Trip after 50% errors
+  resetTimeout: 30000, // Reset after 30 seconds
+}
+Retry Pattern with Exponential Backoff
+•	Automatic retries for transient failures
+•	Implementation:
+typescript
+async function callWithRetry(
+  serviceCall: () => Promise<any>,
+  maxRetries = 3,
+  baseDelay = 1000
+): Promise<any> {
+  let lastError: Error;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await serviceCall();
+    } catch (error) {
+      lastError = error;
+      if (i < maxRetries - 1) {
+        const delay = baseDelay * Math.pow(2, i);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+Bulkhead Pattern
+•	Isolate service failures using connection pools and thread pools
+•	Each service has independent database connection pools
+•	HTTP clients with connection limits per service
+Fallback Strategies
+•	Cache Fallback: Return cached data when service is unavailable
+•	Default Response: Return safe default values
+•	Queue for Later: Queue operations for processing when service recovers
+________________________________________
+Data Consistency Patterns
+Saga Pattern (for distributed transactions)
+•	Use Case: Reservation creation involving multiple services
+•	Implementation:
+typescript
+// Saga for creating a reservation
+1. Start Reservation Saga
+2. Reserve Table (Table Service) → Compensate: Release Table
+3. Create Reservation (Reservation Service) → Compensate: Cancel Reservation
+4. Notify User (Notification Service) → Compensate: Send Cancellation Email
+5. Saga Complete
+Eventual Consistency with Events
+•	Services publish events after local transactions
+•	Other services consume events and update their local state
+•	Example: Reservation created → Analytics service updates metrics
+Two-Phase Commit (2PC) Alternative
+•	For strong consistency requirements
+•	Implementation: Using database transactions across services via XA transactions
+•	Trade-off: Higher latency, more complex failure handling
+Compensating Transactions
+•	For operations that cannot be rolled back
+•	Example: Email notification sent → Send follow-up cancellation email
+________________________________________
+Distributed Transaction Handling
+Approach: Orchestrated Saga Pattern
+•	Central saga orchestrator manages transaction flow
+•	Each service exposes compensating endpoints
+•	Sequence for Reservation Creation:
+text
+1. [Orchestrator] Begin Reservation Transaction
+   ↓
+2. [Orchestrator] → Table Service: Lock Table (10s timeout)
+   ↓
+3. [Orchestrator] ← Table Service: Table Locked Successfully
+   ↓
+4. [Orchestrator] → Reservation Service: Create Reservation
+   ↓
+5. [Orchestrator] ← Reservation Service: Reservation Created
+   ↓
+6. [Orchestrator] → Notification Service: Send Confirmation
+   ↓
+7. [Orchestrator] ← Notification Service: Notification Sent
+   ↓
+8. [Orchestrator] → All Services: Commit Transaction
+Transaction Timeout and Rollback
+•	Timeout: 30 seconds for complete reservation flow
+•	Automatic Rollback: If any step fails, execute compensating transactions in reverse order
+•	Manual Intervention: Failed compensations logged for manual resolution
+Idempotency Keys
+•	All mutation operations include idempotency keys
+•	Prevents duplicate processing of retried requests
+•	Implementation:
+typescript
+interface ReservationRequest {
+  idempotencyKey: string;
+  userId: string;
+  tableId: string;
+  reservationTime: Date;
+  // ... other fields
+}
+Outbox Pattern for Reliable Event Publishing
+•	Events stored in local database "outbox" table
+•	Separate process publishes events from outbox
+•	Ensures at-least-once delivery
+sql
+-- Outbox table schema
+CREATE TABLE service_outbox (
+    id VARCHAR(36) PRIMARY KEY,
+    aggregate_id VARCHAR(36) NOT NULL,
+    aggregate_type VARCHAR(50) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    payload JSON NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    published BOOLEAN DEFAULT FALSE
+);
+________________________________________
+Service Discovery and Load Balancing
+Service Registry
+•	Pattern: Client-side discovery with Eureka-like registry
+•	Implementation: Consul or etcd for service registration
+•	Fallback: Static configuration for local development
+API Gateway Pattern
+•	Single entry point for all client requests
+•	Responsibilities:
+o	Request routing
+o	Authentication/Authorization
+o	Rate limiting
+o	Request/Response transformation
+o	Circuit breaking
+Load Balancing Strategy
+•	Round Robin: For stateless services (User Service)
+•	Consistent Hashing: For stateful operations (stickiness to specific instances)
+•	Least Connections: For long-running operations
+________________________________________
+Architectural Diagrams
+Component Diagram
+ 
+
+Sequence Diagram - Reservation Flow
+
+
+
+
+ 
+
+Failure Handling Sequence Diagram
+
+ 
+
+
+
+Monitoring and Observability
+Health Checks
+•	Each service exposes /health endpoint
+•	Composite health checks (database, message queue, dependent services)
+•	Response Format:
+json
+{
+  "status": "UP",
+  "components": {
+    "database": { "status": "UP" },
+    "messageQueue": { "status": "UP" },
+    "tableService": { "status": "UP" }
+  }
+}
+Distributed Tracing
+•	Implementation: OpenTelemetry with Jaeger
+•	Trace IDs propagated across service boundaries
+•	Configuration:
+typescript
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+import { JaegerExporter } from '@opentelemetry/exporter-jaeger';
+Metrics Collection
+•	Prometheus metrics endpoint on each service
+•	Custom business metrics (reservations created, failed bookings, etc.)
+•	Key Metrics:
+o	Request latency (p95, p99)
+o	Error rates per endpoint
+o	Database connection pool usage
+o	Message queue depth
+________________________________________
+Deployment Considerations
+Container Orchestration
+•	Local: Docker Compose with service dependencies
+•	Production: Kubernetes with:
+o	Liveness probes
+o	Readiness probes
+o	Resource limits
+o	Horizontal Pod Autoscaling
+Database Per Service Pattern
+•	Each service owns its database schema
+•	No direct database access between services
+•	Exception: Read-only replicas for cross-service reporting
+Configuration Management
+•	Environment-specific configuration
+•	Secrets management via HashiCorp Vault or Kubernetes Secrets
+•	Feature flags for gradual rollouts
+
+1.2 Database Design
+
+What database technology will each service use? (PostgreSQL or MySQL)
+Choice: MySQL 8.0
+Justification:
+•	ACID Compliance: Strong transactional guarantees for reservation system
+•	Referential Integrity: Foreign key constraints for data consistency
+•	Mature Ecosystem: Proven reliability for high-traffic systems
+•	JSON Support: Native JSON data type for flexible schema (MySQL 8.0+)
+•	Row-Level Locking: InnoDB engine supports concurrent reservations
+•	Read Replicas: Built-in support for scaling read operations
+•	Cost-Effective: Open-source with strong community support
+Alternative Considered: PostgreSQL
+•	Why Not Chosen: While PostgreSQL has excellent JSON support and advanced features, MySQL's simpler replication model and widespread expertise in I have made it the better choice for this project's timeline.
+Design complete schemas with all tables, columns, data types, and constraints
+Complete Schema Design
+Service 1: User Service Database
+Purpose: Manage user authentication, profiles, and authorization.
+sql
+-- Users table
+CREATE TABLE users (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    phone VARCHAR(20),
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role ENUM('customer', 'staff', 'admin') DEFAULT 'customer',
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Soft delete
+    deleted_at TIMESTAMP NULL,
+    
+    -- Constraints
+    CONSTRAINT chk_email_format CHECK (email REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- User sessions for JWT token management
+CREATE TABLE user_sessions (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    user_id VARCHAR(36) NOT NULL,
+    token_hash VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Foreign key
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Indexes
+    INDEX idx_user_id (user_id),
+    INDEX idx_expires_at (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+________________________________________
+Service 2: Table Management Service Database
+Purpose: Manage restaurants, tables, and real-time table status.
+sql
+-- Restaurant locations
+CREATE TABLE restaurants (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    name VARCHAR(255) NOT NULL,
+    
+    -- Location
+    address VARCHAR(500) NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    state VARCHAR(100) NOT NULL,
+    zip_code VARCHAR(20) NOT NULL,
+    
+    -- Contact
+    phone VARCHAR(20),
+    email VARCHAR(255),
+    
+    -- Configuration
+    timezone VARCHAR(50) NOT NULL DEFAULT 'America/New_York',
+    opening_time TIME DEFAULT '11:00:00',
+    closing_time TIME DEFAULT '22:00:00',
+    
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Indexes
+    INDEX idx_city_state (city, state),
+    INDEX idx_is_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Dining tables
+CREATE TABLE tables (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    restaurant_id VARCHAR(36) NOT NULL,
+    table_number VARCHAR(20) NOT NULL,
+    
+    -- Table properties
+    capacity INT NOT NULL CHECK (capacity > 0),
+    min_party_size INT DEFAULT 1,
+    
+    -- Real-time status
+    status ENUM('available', 'occupied', 'reserved', 'maintenance') DEFAULT 'available',
+    status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Foreign key
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE,
+    
+    -- Constraints
+    UNIQUE KEY unique_table_restaurant (restaurant_id, table_number),
+    CONSTRAINT chk_capacity_min CHECK (min_party_size <= capacity),
+    
+    -- Indexes for common queries
+    INDEX idx_restaurant (restaurant_id),
+    INDEX idx_status (status),
+    INDEX idx_capacity (capacity),
+    INDEX idx_restaurant_status (restaurant_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+________________________________________
+Service 3: Reservation Service Database
+Purpose: Handle reservations, waitlist, and conflict prevention.
+sql
+-- Core reservations table
+CREATE TABLE reservations (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    reservation_number VARCHAR(20) UNIQUE NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    restaurant_id VARCHAR(36) NOT NULL,
+    table_id VARCHAR(36),
+    
+    -- Reservation details
+    party_size INT NOT NULL CHECK (party_size > 0),
+    reservation_date DATE NOT NULL,
+    reservation_time TIME NOT NULL,
+    duration_minutes INT NOT NULL DEFAULT 90,
+    
+    -- Status lifecycle
+    status ENUM('pending', 'confirmed', 'seated', 'completed', 'cancelled', 'no_show') DEFAULT 'pending',
+    status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Customer contact (denormalized from user service)
+    customer_name VARCHAR(255),
+    customer_phone VARCHAR(20),
+    
+    -- Business logic
+    special_requests TEXT,
+    
+    -- Optimistic locking
+    version INT DEFAULT 1,
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT chk_party_size CHECK (party_size >= 1),
+    CONSTRAINT chk_duration CHECK (duration_minutes BETWEEN 30 AND 240),
+    
+    -- Indexes (comprehensive for all query patterns)
+    INDEX idx_user_id (user_id),
+    INDEX idx_restaurant_id (restaurant_id),
+    INDEX idx_table_id (table_id),
+    INDEX idx_status (status),
+    INDEX idx_reservation_datetime (reservation_date, reservation_time),
+    INDEX idx_restaurant_datetime (restaurant_id, reservation_date, reservation_time),
+    INDEX idx_user_restaurant (user_id, restaurant_id),
+    UNIQUE INDEX idx_table_timeslot (table_id, reservation_date, reservation_time) 
+        WHERE status IN ('pending', 'confirmed', 'seated')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Waitlist management
+CREATE TABLE waitlist_entries (
+    id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
+    restaurant_id VARCHAR(36) NOT NULL,
+    user_id VARCHAR(36) NOT NULL,
+    party_size INT NOT NULL,
+    phone_number VARCHAR(20) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    
+    -- Status tracking
+    status ENUM('waiting', 'notified', 'seated', 'cancelled') DEFAULT 'waiting',
+    position INT NOT NULL,
+    estimated_wait_time INT, -- in minutes
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    -- Constraints
+    CONSTRAINT chk_waitlist_party_size CHECK (party_size > 0),
+    
+    -- Indexes for efficient waitlist management
+    INDEX idx_restaurant_status (restaurant_id, status),
+    INDEX idx_position (restaurant_id, position),
+    INDEX idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+________________________________________
+Relationships and Foreign Keys
+Within-Service Relationships:
+1.	User Service:
+o	user_sessions.user_id → users.id (One-to-Many)
+2.	Table Service:
+o	tables.restaurant_id → restaurants.id (Many-to-One)
+o	One restaurant has many tables
+3.	Reservation Service:
+o	reservations.table_id references table service's tables (cross-service, logical)
+o	reservations.restaurant_id references table service's restaurants (cross-service, logical)
+o	reservations.user_id references user service's users (cross-service, logical)
+o	waitlist_entries.restaurant_id references table service's restaurants (cross-service, logical)
+o	waitlist_entries.user_id references user service's users (cross-service, logical)
+Note: Cross-service foreign keys are logical references only. Actual referential integrity is maintained through application logic and events.
+________________________________________
+Indexing Strategy
+Performance-Critical Indexes:
+1. Reservation Service (Most Critical):
+•	idx_table_timeslot: Unique constraint to prevent double bookings
+•	idx_restaurant_datetime: Fast search for reservations by restaurant and time
+•	idx_status: Filter reservations by status
+•	idx_reservation_datetime: Range queries for time-based operations
+2. Table Service:
+•	idx_restaurant_status: Quick availability checks
+•	idx_capacity: Efficient table search by party size
+•	idx_restaurant: All table queries are restaurant-scoped
+3. User Service:
+•	users.email: Unique index for authentication
+•	user_sessions.user_id: Session lookup by user
+Composite Indexes for Common Query Patterns:
+sql
+-- For searching available tables
+CREATE INDEX idx_table_availability ON tables (restaurant_id, status, capacity, min_party_size);
+
+-- For reservation history queries
+CREATE INDEX idx_user_reservation_history ON reservations (user_id, reservation_date DESC, created_at DESC);
+
+-- For staff dashboard queries
+CREATE INDEX idx_restaurant_today_reservations ON reservations (restaurant_id, reservation_date, status, reservation_time)
+WHERE reservation_date = CURRENT_DATE;
+________________________________________
+Handling Cross-Service Data
+Approach: Eventual Consistency with Denormalization
+1. Data Duplication Strategy:
+•	Reservation Service stores denormalized copies of:
+o	Customer name and phone (from User Service)
+o	Restaurant details (from Table Service)
+•	Purpose: Avoid synchronous calls during critical paths
+2. Synchronization via Events:
+typescript
+// When user updates profile in User Service
+UserUpdatedEvent {
+    userId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+}
+
+// Reservation Service consumes this event
+async function handleUserUpdated(event: UserUpdatedEvent) {
+    await reservationDb.updateReservationCustomerInfo(
+        event.userId,
+        {
+            customerName: `${event.firstName} ${event.lastName}`,
+            customerPhone: event.phone
+        }
+    );
+}
+3. Read-Through Cache for Real-time Data:
+•	For real-time table status, Reservation Service caches table availability
+•	Cache invalidated when Table Service publishes status change events
+•	Fallback to synchronous API call if cache miss
+________________________________________
+Database Migration Strategy with Prisma
+Why Prisma:
+1.	Type-safe migrations: Auto-generated SQL with TypeScript support
+2.	Version control: Migration files tracked in git
+3.	Rollback support: Easy downgrade capabilities
+4.	Environment-aware: Different configurations for dev/test/prod
+Migration Workflow:
+1. Prisma Schema per Service:
+text
+services/
+├── user-service/
+│   ├── prisma/
+│   │   ├── schema.prisma
+│   │   └── migrations/
+│   │       └── 20240101000000_init/
+│   │           └── migration.sql
+├── reservation-service/
+│   └── prisma/
+│       └── schema.prisma
+└── table-service/
+    └── prisma/
+        └── schema.prisma
+2. Prisma Schema Example (Reservation Service):
+prisma
+// schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Reservation {
+  id                  String   @id @default(uuid())
+  reservationNumber   String   @unique @db.VarChar(20)
+  userId              String   @map("user_id")
+  restaurantId        String   @map("restaurant_id")
+  tableId             String?  @map("table_id")
+  
+  partySize           Int      @map("party_size")
+  reservationDate     DateTime @map("reservation_date") @db.Date
+  reservationTime     DateTime @map("reservation_time") @db.Time
+  durationMinutes     Int      @default(90) @map("duration_minutes")
+  
+  status              ReservationStatus @default(pending)
+  statusUpdatedAt     DateTime @default(now()) @map("status_updated_at")
+  
+  customerName        String?  @map("customer_name") @db.VarChar(255)
+  customerPhone       String?  @map("customer_phone") @db.VarChar(20)
+  
+  specialRequests     String?  @map("special_requests") @db.Text
+  
+  version             Int      @default(1)
+  
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @default(now()) @updatedAt @map("updated_at")
+  
+  @@index([userId])
+  @@index([restaurantId])
+  @@index([tableId])
+  @@index([status])
+  @@index([reservationDate, reservationTime])
+  @@index([restaurantId, reservationDate, reservationTime])
+  @@unique([tableId, reservationDate, reservationTime], name: "idx_table_timeslot")
+  
+  @@map("reservations")
+}
+
+enum ReservationStatus {
+  pending
+  confirmed
+  seated
+  completed
+  cancelled
+  no_show
+}
+
+model WaitlistEntry {
+  id                String             @id @default(uuid())
+  restaurantId      String             @map("restaurant_id")
+  userId            String             @map("user_id")
+  partySize         Int                @map("party_size")
+  phoneNumber       String             @map("phone_number") @db.VarChar(20)
+  name              String             @db.VarChar(255)
+  
+  status            WaitlistStatus     @default(waiting)
+  position          Int
+  estimatedWaitTime Int?               @map("estimated_wait_time")
+  
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @default(now()) @updatedAt @map("updated_at")
+  
+  @@index([restaurantId, status])
+  @@index([restaurantId, position])
+  @@index([createdAt])
+  
+  @@map("waitlist_entries")
+}
+
+enum WaitlistStatus {
+  waiting
+  notified
+  seated
+  cancelled
+}
+3. Migration Commands:
+bash
+# 1. Make schema changes
+npx prisma migrate dev --name add_reservation_status_index
+
+# 2. Generate migration files
+# Creates: prisma/migrations/20240102000000_add_reservation_status_index/migration.sql
+
+# 3. Apply migrations
+npx prisma migrate deploy
+
+# 4. In production (CI/CD pipeline)
+npx prisma migrate deploy --preview-feature
+4. Migration Versioning:
+•	Each migration has timestamp prefix: YYYYMMDDHHMMSS_description
+•	Migration history stored in _prisma_migrations table
+•	Rollback with: npx prisma migrate resolve --rolled-back <migration_name>
+5. Environment-Specific Migrations:
+typescript
+// package.json scripts
+{
+  "scripts": {
+    "migrate:dev": "dotenv -e .env.development -- npx prisma migrate dev",
+    "migrate:prod": "dotenv -e .env.production -- npx prisma migrate deploy",
+    "migrate:reset": "npx prisma migrate reset",
+    "prisma:studio": "npx prisma studio"
+  }
+}
+How will you handle data that needs to exist across services?
+Core Principle: Domain Ownership with Strategic Duplication
+The fundamental rule is that each service owns its domain data, but we accept that some data must be duplicated across services for performance and availability reasons. Here's our approach:
+________________________________________
+1. Data Ownership Strategy
+Primary Source of Truth
+•	User Service: Owns user profiles, authentication, and authorization data
+•	Table Service: Owns restaurant locations, table configurations, and real-time status
+•	Reservation Service: Owns reservations, waitlist, and booking lifecycle
+What Gets Duplicated and Why:
+Customer Information in Reservations
+•	Why: Reservation Service needs customer names and contact info for staff reference and notifications
+•	What's Duplicated: Customer name and phone number (denormalized from User Service)
+•	How: Copied during reservation creation, updated via events
+Restaurant Details in Reservations
+•	Why: Reservation records should be self-contained for reporting and history
+•	What's Duplicated: Restaurant name and basic location info
+•	How: Copied during reservation creation
+Table Availability Status
+•	Why: Reservation Service needs quick availability checks without synchronous calls
+•	What's Duplicated: Current table status and capacity
+•	How: Cached with short TTL, invalidated on status changes
+________________________________________
+2. Synchronization Mechanisms
+Event-Driven Updates (Primary Method)
+When source data changes, the owning service publishes an event. Other services consume these events to update their local copies.
+Examples:
+•	When a user updates their profile → User Service publishes UserUpdated event → Reservation Service updates customer info in existing reservations
+•	When a table status changes → Table Service publishes TableStatusChanged event → Reservation Service updates its availability cache
+•	When a restaurant updates hours → Table Service publishes event → Frontend caches are invalidated
+Cache-Aside Pattern
+For read-heavy data like table availability:
+1.	Check local cache first
+2.	If cache miss, call source service synchronously
+3.	Store result in cache with appropriate TTL
+4.	Subscribe to change events to invalidate cache
+Read-Through API Gateway
+For some cross-service queries, the API Gateway can aggregate data from multiple services, presenting a unified view to the client without requiring data duplication.
+________________________________________
+3. Consistency Models by Use Case
+Strong Consistency Required:
+•	Reservation Creation: Must have up-to-date table availability and user validation
+•	Payment Processing: Must verify user and reservation status
+•	Real-time Seat Assignments: Staff needs accurate current table status
+Eventual Consistency Acceptable:
+•	Customer Profile Updates: It's okay if reservation history shows old name temporarily
+•	Analytics and Reporting: Slightly stale data is acceptable
+•	Email Notifications: Can use slightly outdated customer email
+________________________________________
+4. Data Freshness Strategies
+Time-to-Live (TTL) Based:
+•	Short TTL (seconds): For table availability and real-time status
+•	Medium TTL (minutes): For restaurant details and operating hours
+•	Long TTL (hours/days): For static reference data
+Event-Driven Invalidation:
+Subscribe to change events from source services to immediately invalidate stale data.
+Version Numbers:
+Include version numbers with duplicated data. When versions mismatch, trigger refresh from source.
+________________________________________
+5. Handling Missing or Stale Data
+Fallback Strategies:
+1.	Synchronous Call: If cached data is missing or too stale, make direct API call
+2.	Default Values: Use reasonable defaults when data unavailable
+3.	Degraded Experience: Show partial information with loading states
+Reconciliation Processes:
+•	Scheduled Jobs: Nightly jobs to sync mismatched data
+•	Manual Triggers: Admin tools to force resync specific records
+•	Monitoring: Track data drift between services and alert on anomalies
+________________________________________
+6. Design Principles for Cross-Service Data
+Minimize Duplication
+Only duplicate what's absolutely necessary for:
+•	Performance (avoiding synchronous calls in hot paths)
+•	Resilience (service should function during source service outages)
+•	Convenience (self-contained records for common queries)
+Clear Ownership
+Each piece of data has exactly one owner service. Other services treat it as read-only copy.
+Explicit Contracts
+Define clear interfaces for what data can be accessed and how it should be synchronized.
+Traceability
+Maintain metadata about where duplicated data came from and when it was last updated.
+________________________________________
+7. Failure Scenarios and Recovery
+When Source Service is Down:
+1.	Continue using cached/stale data if acceptable
+2.	Queue operations requiring fresh data for later retry
+3.	Provide appropriate user feedback ("system updating")
+When Synchronization Fails:
+1.	Retry with exponential backoff
+2.	Store in dead-letter queue for manual intervention
+3.	Log inconsistencies for later reconciliation
+Data Corruption:
+1.	Validate data integrity on receipt
+2.	Discard invalid data and refresh from source
+3.	Alert on patterns of corruption
+________________________________________
+8. Practical Examples from Our System
+Example 1: Creating a Reservation
+1.	Reservation Service needs: user info + table info
+2.	Synchronous calls: Validate user exists, check table availability
+3.	Duplicate: Copy user name/phone, restaurant name into reservation record
+4.	Result: Reservation contains all needed info for staff reference
+Example 2: Staff Dashboard
+1.	Needs: Current reservations + table status + customer info
+2.	API Gateway aggregates: Calls Reservation Service for bookings, Table Service for status
+3.	Caches: Dashboard caches combined view for 30 seconds
+4.	Real-time updates: WebSocket pushes status changes
+Example 3: Customer History
+1.	User views their reservation history
+2.	Single service: All in Reservation Service (contains duplicated restaurant info)
+3.	No cross-service calls: Fast response, simple implementation
+4.	Eventual updates: If restaurant name changes, future views show new name
+________________________________________
+Key Trade-offs and Decisions
+1.	We accept data duplication for performance and resilience
+2.	We use eventual consistency for non-critical data
+3.	We maintain strong consistency for transactional operations
+4.	We implement robust synchronization to minimize drift
+5.	We monitor data health to catch issues early
+This approach balances the need for independent, scalable services with the practical reality that some data must be shared, while maintaining clear ownership boundaries and ensuring the system remains understandable and maintainable.
+Database Migration and Versioning Strategy
+Approach: Prisma with Git-Based Version Control
+1. Migration Tool Selection: Prisma
+•	Why Prisma: Type-safe schema definitions, automatic SQL generation, rollback support
+•	Each service has its own Prisma schema and migration history
+•	Migration files are stored in version control alongside application code
+2. Migration Workflow
+Development Phase:
+1.	Modify Prisma schema (schema.prisma)
+2.	Generate migration: npx prisma migrate dev --name descriptive-name
+3.	Prisma creates timestamped SQL files in prisma/migrations/
+4.	Auto-applies to development database
+5.	Commit migration files to git
+Deployment Phase:
+1.	CI/CD pipeline runs npx prisma migrate deploy
+2.	Prisma applies pending migrations in order
+3.	Each migration runs in a transaction
+4.	Migration history stored in _prisma_migrations table
+3. Versioning Strategy
+File Naming Convention:
+text
+YYYYMMDDHHMMSS_descriptive_name/
+├── migration.sql      # SQL statements
+└── README.md          # Human-readable description
+Example: 20240115103000_add_reservation_version_column/
+4. Environment Management
+•	Development: Auto-apply migrations
+•	Staging: Manual review before applying
+•	Production: Automated through CI/CD with approval gates
+5. Rollback Strategy
+•	For failed migrations: Prisma supports migrate resolve for manual intervention
+•	Schema changes: Written to be backward-compatible when possible
+•	Data migrations: Separate from schema changes, with backup before execution
+6. Team Collaboration
+•	All developers work against the same schema definitions
+•	Migration conflicts resolved through code review
+•	Schema changes require PR approval
+7. Database State Verification
+•	Migration scripts include verification steps
+•	Health checks validate database state post-migration
+•	Automated tests run against migrated schema
+________________________________________
+Ensuring Data Consistency in a Distributed System
+Core Philosophy: Right Consistency for Right Scenario
+We use different consistency strategies based on the business requirement and failure tolerance of each operation.
+1. Strong Consistency Patterns
+For Critical Operations (Reservation Creation, Updates)
+Saga Pattern with Compensation:
+•	Each business transaction spans multiple services
+•	Local transactions at each service
+•	If any step fails, compensating transactions undo previous steps
+•	Example: Reservation creation fails → release table lock, clean up reservation record
+Two-Phase Commit Alternative:
+•	For operations requiring atomicity across services
+•	Coordinator service manages prepare/commit phases
+•	Used sparingly due to complexity and latency
+Optimistic Concurrency Control
+•	Version numbers on resources (like reservations)
+•	Clients include version in update requests
+•	Server rejects updates with stale versions
+•	Prevents lost updates in concurrent scenarios
+2. Eventual Consistency Patterns
+For Non-Critical Data (User Profile Updates, Restaurant Info)
+Event-Driven Updates:
+•	Source service publishes change events
+•	Consumer services update their local copies asynchronously
+•	Acceptable delay: seconds to minutes
+•	Example: User changes phone number → reservation records updated eventually
+Message Queue with Retries:
+•	Guaranteed delivery of events
+•	Automatic retry on failures
+•	Dead-letter queue for manual intervention
+3. Concurrency Control for Hot Resources
+Preventing Double Bookings
+Database-Level Locking:
+•	SELECT ... FOR UPDATE on table availability rows
+•	Short-lived locks (5-10 seconds)
+•	Prevents race conditions for same time slot
+Application-Level Reservations:
+•	Temporary holds on tables
+•	Expire after short period if not confirmed
+•	Allows for multi-step reservation flows
+4. Idempotency for Reliability
+All Mutation Operations
+•	Clients provide idempotency keys
+•	Server deduplicates duplicate requests
+•	Essential for retry safety
+•	Prevents duplicate charges, double bookings
+5. Consistency Verification and Repair
+Monitoring and Reconciliation
+Automated Consistency Checks:
+•	Scheduled jobs compare data across services
+•	Detect and log inconsistencies
+•	Example: Compare user name in User Service vs Reservation Service
+Repair Mechanisms:
+•	Automatic repair for known-safe scenarios
+•	Manual intervention for complex inconsistencies
+•	Audit logs of all repairs
+Data Quality Metrics
+•	Track consistency drift rates
+•	Alert on abnormal inconsistency levels
+•	Dashboards showing data health
+6. Failure Handling Strategies
+When Services are Unavailable
+Circuit Breakers:
+•	Fail fast when dependency is down
+•	Prevent cascading failures
+•	Fallback to cached data when appropriate
+Queue and Retry:
+•	Queue operations requiring unavailable services
+•	Automatic retry when service recovers
+•	User receives "processing" status
+When Synchronization Fails
+Retry with Backoff:
+•	Exponential backoff for retries
+•	Maximum retry attempts
+•	Manual intervention after retries exhausted
+Compensating Actions:
+•	Reverse completed steps
+•	Notify administrators
+•	User-friendly error messages
+7. Business-Specific Consistency Rules
+Reservation System Specifics
+Temporal Consistency:
+•	Real-time table status for staff
+•	Near-real-time for customer apps
+•	Eventual for historical reports
+Causal Consistency:
+•	Reservation creation happens before confirmation email
+•	Table status changes before staff notifications
+•	Cancellation before refund processing
+8. Implementation Guardrails
+Development Guidelines
+•	Clear documentation of consistency requirements per operation
+•	Code reviews verify consistency patterns
+•	Testing includes concurrent scenarios
+Operational Controls
+•	Monitoring for consistency violations
+•	Alerting on abnormal patterns
+•	Regular consistency audits
+9. Trade-offs and Decisions
+Consistency vs Availability
+•	Strong consistency: For financial transactions and reservations
+•	Eventual consistency: For profile updates and non-critical data
+•	Choice based on: Business impact, user experience, failure tolerance
+Complexity vs Correctness
+•	Simpler patterns where eventual consistency suffices
+•	More complex patterns (Saga) where correctness is critical
+•	Always document the chosen consistency model
+10. Continuous Improvement
+Learning from Incidents
+•	Post-mortems for consistency failures
+•	Update patterns based on real-world issues
+•	Share learnings across teams
+Evolving the System
+•	Start with simpler patterns
+•	Introduce complexity only when needed
+•	Regular review of consistency requirements
+1.3 API Architecture
+API Design Principles
+Core Guidelines:
+1.	RESTful design with resource-oriented endpoints
+2.	Consistent naming (kebab-case for URLs, camelCase for JSON)
+3.	Proper HTTP methods (GET for read, POST for create, PUT for update, DELETE for delete)
+4.	Stateless operations (all necessary data in request)
+5.	HATEOAS for discoverable APIs (optional but recommended)
+6.	OpenAPI 3.0 specification for all services
+________________________________________
+API Versioning Strategy
+Approach: URL Versioning
+•	All APIs include version in path: /api/v1/{resource}
+•	Major versions in URL (/v1/, /v2/)
+•	Minor versions via headers (Accept: application/vnd.restaurant.v1.1+json)
+•	Backward compatibility within major versions
+•	Deprecation notice for 6 months before removal
+Version Header Example:
+http
+GET /api/v1/reservations
+Accept: application/vnd.restaurant.v1.2+json
+X-API-Version: 1.2
+________________________________________
+Authentication & Authorization Strategy
+Authentication: JWT Bearer Tokens
+•	Format: Authorization: Bearer <jwt-token>
+•	Issuer: User Service
+•	Token lifespan: 15 minutes access, 7 days refresh
+•	Claims: sub (user ID), role, restaurant_id (for staff)
+Authorization: Role-Based Access Control
+Roles:
+1.	Customer: Create/view own reservations
+2.	Staff: Manage tables, view reservations for assigned restaurant
+3.	Admin: Full access to assigned restaurant
+4.	Super Admin: Cross-restaurant access
+Endpoint Protection:
+•	Public endpoints: Login, registration, availability check
+•	Customer endpoints: Reservation management
+•	Staff endpoints: Table management, restaurant operations
+•	Admin endpoints: Configuration, reporting
+________________________________________
+Rate Limiting & Throttling
+Strategy: Token Bucket Algorithm
+•	Global limits: 1000 requests/minute per IP
+•	Authenticated users: 200 requests/minute
+•	Critical endpoints: Lower limits (5 requests/minute for reservation creation)
+•	Headers included in response:
+text
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 987
+X-RateLimit-Reset: 1642176000
+Implementation:
+•	Redis for distributed rate limiting
+•	Different buckets for different endpoint categories
+•	Graceful degradation (429 Too Many Requests)
+________________________________________
+Error Response Standards
+Standard Error Format:
+json
+{
+  "error": {
+    "code": "RESERVATION_CONFLICT",
+    "message": "Table is already reserved for the selected time",
+    "details": {
+      "tableId": "table_123",
+      "requestedTime": "2024-01-15T19:00:00Z",
+      "conflictingReservationId": "res_456"
+    },
+    "timestamp": "2024-01-15T10:30:00Z",
+    "requestId": "req_789abc"
+  }
+}
+HTTP Status Codes:
+•	200 OK: Successful GET/PUT
+•	201 Created: Resource created
+•	204 No Content: Successful DELETE
+•	400 Bad Request: Invalid input
+•	401 Unauthorized: Missing/invalid token
+•	403 Forbidden: Insufficient permissions
+•	404 Not Found: Resource doesn't exist
+•	409 Conflict: Business rule violation (double booking)
+•	422 Unprocessable Entity: Validation errors
+•	429 Too Many Requests: Rate limit exceeded
+•	500 Internal Server Error: Server error
+•	503 Service Unavailable: Dependency down
+________________________________________
+Service 1: User Service API
+Base URL: https://api.restaurant.com/api/v1/users
+Endpoints:
+Authentication
+http
+POST /auth/login
+POST /auth/register
+POST /auth/refresh-token
+POST /auth/logout
+User Management
+http
+GET    /users/me
+PUT    /users/me
+DELETE /users/me
+
+GET    /users/:userId (admin only)
+PUT    /users/:userId (admin only)
+DELETE /users/:userId (admin only)
+Request/Response Examples:
+Login Request:
+json
+{
+  "email": "customer@example.com",
+  "password": "securePassword123"
+}
+Login Response:
+json
+{
+  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
+  "expiresIn": 900,
+  "user": {
+    "id": "user_123",
+    "email": "customer@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "role": "customer",
+    "phone": "+1234567890"
+  }
+}
+Update Profile Request:
+json
+{
+  "firstName": "John",
+  "lastName": "Smith",
+  "phone": "+1234567890"
+}
+Validation Rules:
+•	Email: Valid format, unique
+•	Password: Min 8 chars, at least 1 number, 1 uppercase
+•	Phone: Valid format for country
+________________________________________
+Service 2: Table Management Service API
+Base URL: https://api.restaurant.com/api/v1/tables
+Endpoints:
+Restaurants
+http
+GET    /restaurants
+GET    /restaurants/:restaurantId
+POST   /restaurants (admin only)
+PUT    /restaurants/:restaurantId (admin only)
+DELETE /restaurants/:restaurantId (admin only)
+Tables
+http
+GET    /restaurants/:restaurantId/tables
+GET    /restaurants/:restaurantId/tables/:tableId
+POST   /restaurants/:restaurantId/tables (staff+)
+PUT    /restaurants/:restaurantId/tables/:tableId (staff+)
+DELETE /restaurants/:restaurantId/tables/:tableId (admin only)
+Availability
+http
+GET /restaurants/:restaurantId/availability
+GET /tables/:tableId/availability
+Table Status (Real-time)
+http
+PUT /tables/:tableId/status (staff+)
+GET /restaurants/:restaurantId/table-status (staff+)
+Request/Response Examples:
+Search Availability Request:
+http
+GET /restaurants/:restaurantId/availability?
+  date=2024-01-20&
+  time=19:00&
+  partySize=4&
+  duration=90
+Availability Response:
+json
+{
+  "restaurantId": "rest_123",
+  "date": "2024-01-20",
+  "time": "19:00",
+  "availableTables": [
+    {
+      "tableId": "table_456",
+      "tableNumber": "A1",
+      "capacity": 6,
+      "locationType": "indoor"
+    },
+    {
+      "tableId": "table_789",
+      "tableNumber": "B2",
+      "capacity": 4,
+      "locationType": "window"
+    }
+  ]
+}
+Update Table Status Request:
+json
+{
+  "status": "occupied",
+  "notes": "Customer seated"
+}
+Validation Rules:
+•	Capacity: 1-20 people
+•	Table number: Unique per restaurant
+•	Status: Valid enum value
+•	Date/time: Future dates only
+________________________________________
+Service 3: Reservation Service API
+Base URL: https://api.restaurant.com/api/v1/reservations
+Endpoints:
+Reservations
+http
+POST   /reservations
+GET    /reservations
+GET    /reservations/:reservationId
+PUT    /reservations/:reservationId
+DELETE /reservations/:reservationId
+
+GET    /users/:userId/reservations (admin only)
+GET    /restaurants/:restaurantId/reservations (staff+)
+Waitlist
+http
+POST   /restaurants/:restaurantId/waitlist
+GET    /restaurants/:restaurantId/waitlist (staff+)
+PUT    /waitlist/:waitlistId/status (staff+)
+DELETE /waitlist/:waitlistId
+Request/Response Examples:
+Create Reservation Request:
+json
+{
+  "restaurantId": "rest_123",
+  "tableId": "table_456",
+  "reservationDate": "2024-01-20",
+  "reservationTime": "19:00",
+  "partySize": 4,
+  "specialRequests": "Window seat preferred",
+  "customerName": "John Doe",
+  "customerPhone": "+1234567890"
+}
+Create Reservation Response:
+json
+{
+  "id": "res_789",
+  "reservationNumber": "RES-2024-00123",
+  "restaurantId": "rest_123",
+  "tableId": "table_456",
+  "userId": "user_123",
+  "partySize": 4,
+  "reservationDate": "2024-01-20",
+  "reservationTime": "19:00",
+  "durationMinutes": 90,
+  "status": "confirmed",
+  "specialRequests": "Window seat preferred",
+  "customerName": "John Doe",
+  "customerPhone": "+1234567890",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z",
+  "links": {
+    "self": "/api/v1/reservations/res_789",
+    "cancel": "/api/v1/reservations/res_789",
+    "modify": "/api/v1/reservations/res_789/modify"
+  }
+}
+Update Reservation Request:
+json
+{
+  "partySize": 5,
+  "specialRequests": "Birthday celebration",
+  "version": 1
+}
+Join Waitlist Request:
+json
+{
+  "restaurantId": "rest_123",
+  "partySize": 2,
+  "customerName": "Jane Smith",
+  "customerPhone": "+0987654321",
+  "notes": "Can arrive within 30 minutes"
+}
+Validation Rules:
+•	Party size: 1-20, must match table capacity
+•	Reservation time: During restaurant hours
+•	Advance booking: Max 90 days in advance
+•	Modification: At least 2 hours before reservation
+•	Cancellation: At least 1 hour before to avoid fee
+________________________________________
+API Gateway Configuration
+Routes:
+text
+/api/v1/users/**      → User Service
+/api/v1/tables/**     → Table Service  
+/api/v1/reservations/** → Reservation Service
+Gateway Responsibilities:
+1.	Request routing to appropriate service
+2.	Authentication validation (JWT verification)
+3.	Rate limiting enforcement
+4.	Request/response logging
+5.	CORS handling
+6.	Request/response transformation
+Health Check Endpoints:
+http
+GET /health        # Gateway health
+GET /health/ready  # All services ready
+GET /health/live   # Gateway alive
+________________________________________
+OpenAPI/Swagger Documentation
+Implementation:
+•	Each service generates OpenAPI spec from code
+•	Swagger UI at /api-docs for each service
+•	API Gateway aggregates all specs at /api/docs
+Example OpenAPI Snippet:
+yaml
+openapi: 3.0.0
+info:
+  title: Reservation Service API
+  version: 1.0.0
+  description: Restaurant reservation management
+servers:
+  - url: https://api.restaurant.com/api/v1
+paths:
+  /reservations:
+    post:
+      summary: Create a new reservation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+      responses:
+        '201':
+          description: Reservation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '409':
+          description: Table not available
+________________________________________
+Pagination & Filtering
+Pagination Format:
+http
+GET /reservations?page=1&limit=20&sort=date_desc
+Response with Pagination:
+json
+{
+  "data": [...],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "totalItems": 150,
+    "totalPages": 8,
+    "hasNext": true,
+    "hasPrevious": false
+  }
+}
+Filtering Support:
+•	Date ranges: ?startDate=2024-01-01&endDate=2024-01-31
+•	Status: ?status=confirmed,seated
+•	Party size: ?minPartySize=2&maxPartySize=6
+________________________________________
+Request/Response Headers
+Standard Headers:
+text
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer <token>
+X-Request-ID: <uuid>          # For tracing
+X-Correlation-ID: <uuid>       # For distributed tracing
+X-Client-Version: 1.2.0       # Client app version
+X-Idempotency-Key: <key>      # For POST/PUT requests
+Custom Headers:
+text
+X-Restaurant-ID: <id>         # For staff context
+X-User-Role: <role>           # For debugging
+________________________________________
+Webhook/Event Endpoints (Internal)
+For Service-to-Service Communication:
+http
+POST /internal/events/user-updated     # User Service → Reservation Service
+POST /internal/events/table-status     # Table Service → Reservation Service
+POST /internal/events/reservation-created  # Reservation Service → Notification Service
+Authentication: Service-to-service tokens
+Format: CloudEvents standard
+________________________________________
+Testing Endpoints
+Development Only:
+http
+POST /test/reset-database      # Reset to seed data
+POST /test/create-mock-data    # Generate test data
+GET  /test/health/detailed     # Detailed health check
+Production: These endpoints are disabled
+________________________________________
+Performance Considerations
+Response Time Targets:
+•	Availability check: < 200ms
+•	Reservation creation: < 500ms
+•	User profile: < 100ms
+•	List endpoints: < 1000ms (with pagination)
+Caching Headers:
+text
+Cache-Control: public, max-age=300      # 5 minutes for static data
+Cache-Control: no-cache                 # Dynamic data
+ETag: "abc123"                         # For conditional requests
+________________________________________
+Security Measures
+Input Validation:
+•	Request size limits (10MB max)
+•	Content-Type enforcement
+•	SQL injection prevention
+•	XSS protection
+Output Security:
+•	Remove sensitive fields (passwords, tokens)
+•	Rate limit error responses to prevent enumeration
+•	Proper CORS configuration
+________________________________________
+Monitoring & Analytics
+Metrics Collected:
+•	Request volume per endpoint
+•	Response time percentiles (p50, p95, p99)
+•	Error rates by endpoint
+•	Authentication failures
+•	Rate limit hits
+Logging:
+•	Structured logging (JSON format)
+•	Request/response logging for errors only
+•	Audit logs for data changes
+This API architecture provides a solid foundation that is:
+1.	Consistent across services
+2.	Secure with proper authentication/authorization
+3.	Scalable with rate limiting and caching
+4.	Maintainable with clear versioning
+5.	Documented with OpenAPI specifications
+6.	Production-ready with proper error handling and monitoring
+
+1.4 System Integration
+
+Inter-Service Communication Patterns
+1. Synchronous Communication (Request/Response)
+Used For:
+•	Immediate feedback required
+•	Simple CRUD operations
+•	Data validation during critical paths
+Patterns:
+•	Direct HTTP/REST: For service-to-service calls
+•	API Gateway Routing: All external requests go through gateway
+•	Circuit Breakers: Prevent cascading failures
+•	Timeout Configuration: Service-specific timeouts
+Example Scenarios:
+1.	Reservation Creation: Reservation Service → Table Service (check availability)
+2.	User Validation: Any service → User Service (validate JWT token)
+3.	Real-time Availability: Frontend → Table Service (immediate response needed)
+Implementation:
+•	HTTP/1.1 with keep-alive
+•	JSON payloads
+•	Standardized error handling
+•	Request ID propagation for tracing
+2. Asynchronous Communication (Event-Driven)
+Used For:
+•	Decoupled operations
+•	Background processing
+•	Eventual consistency updates
+•	Notifications
+Patterns:
+•	Fire-and-Forget: Send event, don't wait for response
+•	Request-Response via Events: For complex workflows
+•	Event Carried State Transfer: Events contain necessary data
+________________________________________
+Event-Driven Architecture
+Core Concept:
+Events represent state changes in the system. Services publish events when something significant happens, and other services subscribe to events they care about.
+Event Types:
+1. Domain Events (Business Events)
+•	UserRegistered (User Service → all)
+•	ReservationCreated (Reservation Service → Notification, Analytics)
+•	TableStatusChanged (Table Service → Reservation, Frontend)
+•	WaitlistPositionUpdated (Reservation Service → Frontend)
+2. Integration Events
+•	UserUpdated (User Service → Reservation Service for denormalized data)
+•	RestaurantHoursChanged (Table Service → Reservation Service)
+•	ReservationCancelled (Reservation Service → Table Service)
+Event Structure (CloudEvents Standard):
+json
+{
+  "specversion": "1.0",
+  "type": "com.restaurant.reservation.created",
+  "source": "reservation-service",
+  "id": "event-123",
+  "time": "2024-01-15T10:30:00Z",
+  "datacontenttype": "application/json",
+  "data": {
+    "reservationId": "res_789",
+    "userId": "user_123",
+    "restaurantId": "rest_456",
+    "reservationTime": "2024-01-20T19:00:00Z",
+    "partySize": 4
+  }
+}
+Event Processing Guarantees:
+•	At-least-once delivery: Events may be processed multiple times
+•	Idempotent handlers: Services handle duplicate events safely
+•	Ordering: Events from same aggregate processed in order
+•	Retries: Exponential backoff for failed processing
+________________________________________
+Message Queues / Event Bus
+Technology Choice: RabbitMQ
+Why RabbitMQ over Kafka:
+•	Better for RPC-style communication (needed for some workflows)
+•	Simpler to set up and operate for our scale
+•	Good support for various messaging patterns
+•	Adequate for our expected message volume
+Queue Architecture:
+1. Direct Exchange for Point-to-Point
+text
+Reservation Service ──[reservation.created]──> Notification Service Queue
+2. Fanout Exchange for Broadcast
+text
+Table Service ──[table.status.changed]──> 
+    ├──> Reservation Service Queue (update cache)
+    └──> Frontend WebSocket Queue (real-time updates)
+3. Topic Exchange for Selective Routing
+text
+User Service ──[user.*]──> 
+    ├──> Reservation Service (user.updated)
+    └──> Analytics Service (all user events)
+Queue Configuration:
+•	Durable queues: Survive broker restart
+•	Dead Letter Queues (DLQ): For failed messages
+•	TTL on queues: Auto-expire old messages
+•	Priority queues: For time-sensitive events
+Message Persistence:
+•	Critical events persisted to disk
+•	Acknowledgments required for processing
+•	Manual intervention for DLQ messages
+________________________________________
+Caching Strategy for Performance
+Multi-Layer Caching Approach:
+Layer 1: Client-Side Caching (Browser)
+•	What: Static assets, configuration data
+•	Duration: 1 hour to 1 day
+•	Invalidation: Versioned URLs, cache busting
+Layer 2: CDN Caching
+•	What: Restaurant images, menu data
+•	Duration: 1 day to 1 week
+•	Invalidation: Purge API, TTL-based
+Layer 3: API Gateway Caching
+•	What: Read-heavy, public data (restaurant lists, availability for next hour)
+•	Duration: 1 minute to 5 minutes
+•	Invalidation: Time-based, event-driven purge
+•	Cache-Key: {endpoint}:{params}:{auth-token}
+Layer 4: Application-Level Caching (Redis)
+•	What: Database query results, computed availability, user sessions
+•	Duration: Variable based on data volatility
+•	Patterns: Cache-aside, write-through, read-through
+Cache Categories by Data Type:
+1. Static Data (Long TTL)
+•	Restaurant configurations: 24 hours
+•	Table layouts: 12 hours
+•	Operating hours: 6 hours
+2. Semi-Static Data (Medium TTL)
+•	Table availability for next 2 hours: 5 minutes
+•	User profiles: 15 minutes
+•	Reservation counts: 10 minutes
+3. Dynamic Data (Short TTL)
+•	Real-time table status: 30 seconds
+•	Current waitlist: 1 minute
+•	User's active reservations: 2 minutes
+Cache Invalidation Strategies:
+1. Time-based Invalidation (TTL)
+•	Simple, works for most cases
+•	Acceptable stale data for some time
+2. Event-driven Invalidation
+•	Subscribe to change events
+•	Immediate cache purge
+•	Example: Table status changes → purge availability cache
+3. Version-based Invalidation
+•	Store version with cached data
+•	Check version on cache hit
+•	Refresh if version mismatch
+Cache Implementation Details:
+Redis Configuration:
+yaml
+# Cache tiers
+tier1:  # Hot data (frequent access)
+  maxmemory: 1GB
+  eviction-policy: allkeys-lru
+  
+tier2:  # Warm data
+  maxmemory: 2GB
+  eviction-policy: volatile-lru
+Cache-Aside Pattern Example:
+typescript
+async function getRestaurantAvailability(restaurantId, date, time) {
+  const cacheKey = `availability:${restaurantId}:${date}:${time}`;
+  
+  // 1. Try cache first
+  const cached = await redis.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+  
+  // 2. Cache miss - compute from database
+  const availability = await computeAvailability(restaurantId, date, time);
+  
+  // 3. Store in cache (5 minute TTL)
+  await redis.setex(cacheKey, 300, JSON.stringify(availability));
+  
+  return availability;
+}
+Write-Through for Critical Data:
+typescript
+async function updateTableStatus(tableId, status) {
+  // 1. Update database
+  await tableRepository.updateStatus(tableId, status);
+  
+  // 2. Update cache immediately
+  await redis.set(`table:${tableId}:status`, status, 'EX', 30);
+  
+  // 3. Publish event for other caches
+  await eventBus.publish('table.status.changed', { tableId, status });
+}
+________________________________________
+Real-time Updates to Clients
+WebSocket Connection Strategy:
+1. Connection Management:
+•	WebSocket Server: Separate service or integrated with API Gateway
+•	Authentication: Upgrade from HTTP with JWT validation
+•	Connection Pool: One connection per client device
+•	Heartbeat: 30-second ping/pong to detect dead connections
+2. Subscription Model:
+text
+Client subscribes to:
+- /restaurants/{id}/tables     # Table status updates
+- /restaurants/{id}/waitlist   # Waitlist changes  
+- /users/{id}/reservations     # Personal reservation updates
+- /staff/{restaurantId}/all    # All updates for staff dashboard
+3. Message Format:
+json
+{
+  "type": "table.status.update",
+  "channel": "/restaurants/rest_123/tables",
+  "data": {
+    "tableId": "table_456",
+    "status": "occupied",
+    "updatedAt": "2024-01-15T10:30:00Z"
+  },
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+Fallback Strategies:
+1. WebSocket Primary, HTTP Polling Fallback
+•	Clients try WebSocket first
+•	Fallback to HTTP polling if WebSocket fails
+•	Polling interval: 30 seconds for status, 5 seconds for waitlist
+2. Server-Sent Events (SSE) Alternative
+•	For browsers that don't need bidirectional communication
+•	Simpler than WebSocket, built on HTTP
+Real-time Use Cases:
+1. Customer Facing:
+•	Waitlist position updates
+•	Reservation confirmation/reminders
+•	Table ready notifications
+2. Staff Facing:
+•	Real-time table status changes
+•	New reservation alerts
+•	Walk-in customer notifications
+•	Reservation modifications
+3. Implementation Details:
+typescript
+// WebSocket message flow
+Table Service → [table.status.changed event] → Event Bus
+Event Bus → WebSocket Service → [WebSocket message] → Connected Clients
+________________________________________
+Handling Eventual Consistency
+Understanding the Trade-offs:
+When Eventual Consistency is Acceptable:
+1.	User Profile Updates: Reservation history can show old name briefly
+2.	Restaurant Information: Menu changes, description updates
+3.	Analytics Data: Reports can be slightly stale
+4.	Customer Preferences: Dietary restrictions, favorite tables
+When Strong Consistency is Required:
+1.	Table Availability: Must be accurate to prevent double booking
+2.	Reservation Status: Customer and staff must see same status
+3.	Payment Processing: Must have consistent reservation state
+4.	Time-sensitive Operations: Waitlist notifications, expiration
+Consistency Patterns Implemented:
+1. Read-Your-Writes Consistency
+•	After creating a reservation, the same user sees immediate confirmation
+•	Implemented via: Client-side cache update, sticky sessions, or version checks
+2. Causal Consistency
+•	If event A happens before event B, all services see them in that order
+•	Implemented via: Lamport timestamps, sequence numbers
+3. Monotonic Read Consistency
+•	Once a user sees a value, they won't see an older value
+•	Implemented via: Version vectors, client-side caching
+Mitigation Strategies for Eventual Consistency:
+1. User Experience Design
+•	Optimistic UI Updates: Show change immediately, sync in background
+•	Loading States: Indicate when data is synchronizing
+•	Last Updated Timestamp: Show users how fresh the data is
+•	Manual Refresh Option: Let users force sync if needed
+2. Conflict Resolution
+typescript
+// When User Service and Reservation Service have different user names
+function resolveUserNameConflict(localName, remoteName, timestamp) {
+  // Use most recent update (last-write-wins with timestamps)
+  if (remoteTimestamp > localTimestamp) {
+    return remoteName;
+  }
+  return localName;
+}
+3. Reconciliation Processes
+Scheduled Reconciliation Jobs:
+typescript
+// Nightly job to sync user data
+async function reconcileUserData() {
+  const mismatches = await findDataMismatches();
+  
+  for (const mismatch of mismatches) {
+    // Get source truth from User Service
+    const sourceData = await userService.getUser(mismatch.userId);
+    
+    // Update denormalized copies
+    await reservationService.updateUserData(mismatch.userId, sourceData);
+    
+    // Log for auditing
+    await auditLog.logReconciliation(mismatch, sourceData);
+  }
+}
+Real-time Reconciliation Triggers:
+•	On cache miss with stale version
+•	Before critical operations (payment processing)
+•	User request (manual refresh)
+Monitoring Eventual Consistency:
+1. Health Metrics:
+•	Sync latency: How long for changes to propagate
+•	Drift rate: Percentage of records with inconsistencies
+•	Reconciliation success rate: How often sync succeeds
+2. Alerting:
+•	Critical: Sync latency > 5 minutes for important data
+•	Warning: Drift rate > 1% for any service
+•	Info: Reconciliation job failures
+3. Dashboards:
+•	Real-time consistency status
+•	Historical drift patterns
+•	Service dependency health
+Documentation and Communication:
+1. API Contracts:
+•	Document which endpoints offer strong vs eventual consistency
+•	Specify maximum sync delays for eventually consistent data
+•	List dependencies that affect consistency
+2. User-Facing Messages:
+text
+"Your profile update may take a few minutes to appear 
+in your reservation history."
+3. Staff Training:
+•	Explain which data is real-time vs delayed
+•	Provide manual sync tools for critical situations
+•	Document common reconciliation procedures
+________________________________________
+System Integration Summary
+Communication Matrix:
+From Service	To Service	Pattern	Technology	Consistency
+Reservation	Table	Sync HTTP	REST API	Strong
+Reservation	User	Sync HTTP	REST API	Strong
+User	Reservation	Async	RabbitMQ	Eventual
+Table	Frontend	Async	WebSocket	Real-time
+All	Notification	Async	RabbitMQ	Eventual
+Key Design Decisions:
+1.	Hybrid Sync/Async: Use synchronous for critical paths, async for decoupling
+2.	RabbitMQ over Kafka: Simpler to operate, meets our scale requirements
+3.	Multi-layer Caching: Balance performance with data freshness
+4.	WebSocket for Real-time: Best user experience for staff operations
+5.	Pragmatic Consistency: Strong where needed, eventual where acceptable
+Failure Handling:
+1.	Queue Retries: Exponential backoff for failed events
+2.	Circuit Breakers: Prevent cascade failures in sync calls
+3.	Cache Fallbacks: Serve stale data when sources are down
+4.	Manual Overrides: Staff tools for emergency interventions
+This integration strategy ensures the system is:
+•	Responsive with caching and real-time updates
+•	Reliable with proper failure handling
+•	Scalable with asynchronous communication
+•	Maintainable with clear boundaries and patterns
+•	User-friendly with appropriate consistency guarantees
+1.5 Data Flow & Business Logic
+
+Customer Searches for Available Tables
+Flow Overview:
+ 
+Detailed Steps:
+Step 1: Input Validation
+•	Customer provides: restaurant, date, time, party size, optional duration
+•	Frontend validates: date in future (max 90 days), time during operating hours, party size 1-20
+•	Invalid inputs return immediate error
+Step 2: Cache Check
+•	Check Redis cache for pre-computed availability for this restaurant/time
+•	Cache key: availability:{restaurantId}:{date}:{time}:{partySize}
+•	Cache TTL: 5 minutes (balances freshness with performance)
+Step 3: Database Query
+If cache miss, query tables:
+•	Find tables at specified restaurant with capacity ≥ party size
+•	Tables must be in 'available' or 'reserved' (but check reservation time) status
+•	Consider min_party_size if configured for premium tables
+Step 4: Conflict Checking
+For each candidate table:
+•	Check reservations table for conflicts at requested time
+•	Consider reservation duration (default 90 minutes)
+•	If table is reserved, check if reservation is within ±90 minutes of requested time
+•	Exclude tables with conflicting reservations
+Step 5: Availability Scoring
+Score remaining tables by:
+1.	Capacity match: Tables with capacity closest to party size get highest score
+2.	Location preference: Window/outdoor tables if customer indicated preference
+3.	Recent availability: Tables not recently occupied (for cleaning time)
+4.	Staff preference: Tables easy for servers to access
+Step 6: Result Processing
+•	Sort tables by score (best match first)
+•	Limit to top 10 results
+•	Calculate next available times if requested time is fully booked
+•	Store in cache with 5-minute TTL
+•	Return results with metadata (total available, wait time estimate)
+Step 7: Real-time Status
+•	Availability results include current table status
+•	Frontend subscribes to WebSocket for real-time updates
+•	If table status changes while customer is viewing, UI updates
+________________________________________
+Creating a Reservation with Validation & Conflict Checking
+Flow Overview:
+
+
+ 
+
+Detailed Steps:
+Step 1: Input Validation
+•	Customer provides: restaurant, date, time, party size, optional duration
+•	Frontend validates: date in future (max 90 days), time during operating hours, party size 1-20
+•	Invalid inputs return immediate error
+Step 2: Cache Check
+•	Check Redis cache for pre-computed availability for this restaurant/time
+•	Cache key: availability:{restaurantId}:{date}:{time}:{partySize}
+•	Cache TTL: 5 minutes (balances freshness with performance)
+Step 3: Database Query
+If cache miss, query tables:
+•	Find tables at specified restaurant with capacity ≥ party size
+•	Tables must be in 'available' or 'reserved' (but check reservation time) status
+•	Consider min_party_size if configured for premium tables
+Step 4: Conflict Checking
+For each candidate table:
+•	Check reservations table for conflicts at requested time
+•	Consider reservation duration (default 90 minutes)
+•	If table is reserved, check if reservation is within ±90 minutes of requested time
+•	Exclude tables with conflicting reservations
+Step 5: Availability Scoring
+Score remaining tables by:
+1.	Capacity match: Tables with capacity closest to party size get highest score
+2.	Location preference: Window/outdoor tables if customer indicated preference
+3.	Recent availability: Tables not recently occupied (for cleaning time)
+4.	Staff preference: Tables easy for servers to access
+Step 6: Result Processing
+•	Sort tables by score (best match first)
+•	Limit to top 10 results
+•	Calculate next available times if requested time is fully booked
+•	Store in cache with 5-minute TTL
+•	Return results with metadata (total available, wait time estimate)
+Step 7: Real-time Status
+•	Availability results include current table status
+•	Frontend subscribes to WebSocket for real-time updates
+•	If table status changes while customer is viewing, UI updates
+________________________________________
+Creating a Reservation with Validation & Conflict Checking
+Flow Overview:
+ 
+Detailed Steps:
+Step 1: Input Validation
+•	Customer provides: restaurant, date, time, party size, optional duration
+•	Frontend validates: date in future (max 90 days), time during operating hours, party size 1-20
+•	Invalid inputs return immediate error
+Step 2: Cache Check
+•	Check Redis cache for pre-computed availability for this restaurant/time
+•	Cache key: availability:{restaurantId}:{date}:{time}:{partySize}
+•	Cache TTL: 5 minutes (balances freshness with performance)
+Step 3: Database Query
+If cache miss, query tables:
+•	Find tables at specified restaurant with capacity ≥ party size
+•	Tables must be in 'available' or 'reserved' (but check reservation time) status
+•	Consider min_party_size if configured for premium tables
+Step 4: Conflict Checking
+For each candidate table:
+•	Check reservations table for conflicts at requested time
+•	Consider reservation duration (default 90 minutes)
+•	If table is reserved, check if reservation is within ±90 minutes of requested time
+•	Exclude tables with conflicting reservations
+Step 5: Availability Scoring
+Score remaining tables by:
+1.	Capacity match: Tables with capacity closest to party size get highest score
+2.	Location preference: Window/outdoor tables if customer indicated preference
+3.	Recent availability: Tables not recently occupied (for cleaning time)
+4.	Staff preference: Tables easy for servers to access
+Step 6: Result Processing
+•	Sort tables by score (best match first)
+•	Limit to top 10 results
+•	Calculate next available times if requested time is fully booked
+•	Store in cache with 5-minute TTL
+•	Return results with metadata (total available, wait time estimate)
+Step 7: Real-time Status
+•	Availability results include current table status
+•	Frontend subscribes to WebSocket for real-time updates
+•	If table status changes while customer is viewing, UI updates
+________________________________________
+Creating a Reservation with Validation & Conflict Checking
+Flow Overview:
+ 
+
+Detailed Steps:
+Step 1: Input Validation
+•	Customer provides: restaurant, date, time, party size, optional duration
+•	Frontend validates: date in future (max 90 days), time during operating hours, party size 1-20
+•	Invalid inputs return immediate error
+Step 2: Cache Check
+•	Check Redis cache for pre-computed availability for this restaurant/time
+•	Cache key: availability:{restaurantId}:{date}:{time}:{partySize}
+•	Cache TTL: 5 minutes (balances freshness with performance)
+Step 3: Database Query
+If cache miss, query tables:
+•	Find tables at specified restaurant with capacity ≥ party size
+•	Tables must be in 'available' or 'reserved' (but check reservation time) status
+•	Consider min_party_size if configured for premium tables
+Step 4: Conflict Checking
+For each candidate table:
+•	Check reservations table for conflicts at requested time
+•	Consider reservation duration (default 90 minutes)
+•	If table is reserved, check if reservation is within ±90 minutes of requested time
+•	Exclude tables with conflicting reservations
+Step 5: Availability Scoring
+Score remaining tables by:
+1.	Capacity match: Tables with capacity closest to party size get highest score
+2.	Location preference: Window/outdoor tables if customer indicated preference
+3.	Recent availability: Tables not recently occupied (for cleaning time)
+4.	Staff preference: Tables easy for servers to access
+Step 6: Result Processing
+•	Sort tables by score (best match first)
+•	Limit to top 10 results
+•	Calculate next available times if requested time is fully booked
+•	Store in cache with 5-minute TTL
+•	Return results with metadata (total available, wait time estimate)
+Step 7: Real-time Status
+•	Availability results include current table status
+•	Frontend subscribes to WebSocket for real-time updates
+•	If table status changes while customer is viewing, UI updates
+________________________________________
+Creating a Reservation with Validation & Conflict Checking
+Flow Overview:
+ 
+Detailed Steps:
+Step 1: Input Validation
+•	Customer provides: restaurant, date, time, party size, optional duration
+•	Frontend validates: date in future (max 90 days), time during operating hours, party size 1-20
+•	Invalid inputs return immediate error
+Step 2: Cache Check
+•	Check Redis cache for pre-computed availability for this restaurant/time
+•	Cache key: availability:{restaurantId}:{date}:{time}:{partySize}
+•	Cache TTL: 5 minutes (balances freshness with performance)
+Step 3: Database Query
+If cache miss, query tables:
+•	Find tables at specified restaurant with capacity ≥ party size
+•	Tables must be in 'available' or 'reserved' (but check reservation time) status
+•	Consider min_party_size if configured for premium tables
+Step 4: Conflict Checking
+For each candidate table:
+•	Check reservations table for conflicts at requested time
+•	Consider reservation duration (default 90 minutes)
+•	If table is reserved, check if reservation is within ±90 minutes of requested time
+•	Exclude tables with conflicting reservations
+Step 5: Availability Scoring
+Score remaining tables by:
+1.	Capacity match: Tables with capacity closest to party size get highest score
+2.	Location preference: Window/outdoor tables if customer indicated preference
+3.	Recent availability: Tables not recently occupied (for cleaning time)
+4.	Staff preference: Tables easy for servers to access
+Step 6: Result Processing
+•	Sort tables by score (best match first)
+•	Limit to top 10 results
+•	Calculate next available times if requested time is fully booked
+•	Store in cache with 5-minute TTL
+•	Return results with metadata (total available, wait time estimate)
+Step 7: Real-time Status
+•	Availability results include current table status
+•	Frontend subscribes to WebSocket for real-time updates
+•	If table status changes while customer is viewing, UI updates
+________________________________________
+Creating a Reservation with Validation & Conflict Checking
+Flow Overview:
+ 
+
+Status Update Triggers:
+1. Automated Triggers:
+•	Reservation confirmed → table status: reserved
+•	Reservation time arrived → table status: seated
+•	Reservation completed → table status: cleaning (5 min) → available
+•	No-show detected → table status: available
+•	Hold expired → table status: available
+2. Manual Staff Updates:
+•	Host seats walk-in customer
+•	Server marks table as needing cleaning
+•	Manager takes table out of service
+•	Staff assigns table to reservation
+Real-time Update Flow:
+Step 1: Status Change Detection
+•	Database trigger or application logic detects change
+•	Validate change is allowed (business rules)
+•	Create status change record with timestamp and staff ID
+Step 2: Event Publishing
+•	Create TableStatusChanged event with:
+o	Table ID and restaurant ID
+o	Old and new status
+o	Reason for change
+o	Staff member who made change
+o	Timestamp
+•	Publish to RabbitMQ fanout exchange
+Step 3: Event Distribution
+•	WebSocket Service: Receives event, pushes to connected staff clients
+•	Reservation Service: Updates availability cache
+•	Analytics Service: Records for reporting
+•	Notification Service: Alerts managers for certain status changes
+Step 4: Client Update
+•	Staff WebSocket client receives update
+•	Update UI in real-time:
+o	Color-coded table indicators
+o	Timers for table occupancy
+o	Notifications for status changes
+•	Sound alert for urgent changes (table ready, VIP arrival)
+Staff Dashboard Features:
+1. Visual Table Layout:
+•	Color coding: green=available, red=occupied, yellow=reserved, gray=maintenance
+•	Hover details: customer name, party size, reservation time
+•	Click actions: update status, add notes, assign server
+2. Real-time Metrics:
+•	Current occupancy percentage
+•	Average table turnover time
+•	Waitlist length and estimated wait
+•	Staff coverage by section
+3. Notifications & Alerts:
+•	High priority: VIP arrival, large party seated, complaint received
+•	Medium priority: Reservation arriving soon, table ready for cleaning
+•	Low priority: Reservation cancelled, waitlist update
+4. Historical Tracking:
+•	Timeline view of table status throughout day
+•	Staff performance metrics (tables served, average time)
+•	Bottleneck identification (slow sections, problematic tables)
+Data Consistency Guarantees:
+For Staff:
+•	Strong consistency within restaurant view
+•	Sub-second update latency
+•	No missed updates (at-least-once delivery)
+•	Offline queue with sync on reconnect
+For Customers:
+•	Eventual consistency for availability display
+•	30-second cache TTL for public views
+•	Queue-based update processing
+Failure Handling:
+When WebSocket Disconnects:
+•	Client automatically reconnects
+•	Missed updates fetched on reconnect
+•	Local state synced with server
+When Event System Fails:
+•	Fallback to polling every 30 seconds
+•	Database triggers log missed updates
+•	Manual refresh option for staff
+When Cache Inconsistent:
+•	Version checks on critical operations
+•	Manual override capability for staff
+•	Regular cache validation jobs
+This comprehensive data flow and business logic design ensures the system handles all required scenarios while maintaining data integrity, providing excellent user experience, and supporting staff in managing the restaurant effectively.
+1.6 Scalability & Performance
+How Your System Handles 1000+ Concurrent Users
+System Architecture for Scale:
+text
+[1000+ Users] 
+     ↓
+[Load Balancer] → Distributes traffic evenly
+     ↓
+[4-8 API Servers] → Each handles 125-250 users
+     ↓
+[3 Microservices] → User, Reservation, Table services
+     ↓
+[Database Cluster] → MySQL with read replicas
+     ↓  
+[Redis Cache] → Fast data access
+     ↓
+[RabbitMQ] → Handles background tasks
+Capacity Planning Breakdown:
+1. User Distribution:
+•	1000 users → 4 API servers = 250 users per server
+•	Peak time (7 PM): Double capacity automatically
+•	Each server can handle 500+ connections
+2. Request Flow Example:
+•	100 users search tables → Quick cache response (under 100ms)
+•	50 users book simultaneously → Process in batches, prevent overload
+•	Remaining users browse → Serve static content from CDN
+3. Automatic Scaling:
+•	Scale up: Add more servers when CPU > 70%
+•	Scale down: Remove servers when quiet (3 AM)
+•	Response time: Always under 1 second for users
+________________________________________
+Potential Bottlenecks & Solutions
+Bottleneck 1: Database Slowdown During Peak Hours
+Problem: Too many people booking at 7 PM causes database overload.
+Solutions:
+1.	Add read replicas - Copy database for read operations only
+2.	Use Redis cache - Store popular data in memory
+3.	Queue write operations - Process updates in background
+4.	Optimize slow queries - Fix inefficient database queries
+Bottleneck 2: Simultaneous Booking Conflicts
+Problem: Two people try to book same table at same time.
+Solutions:
+1.	Database locking - First person gets lock, second gets alternative
+2.	Temporary holds - Reserve table for 2 minutes while booking
+3.	Queue system - Process bookings one at a time for hot tables
+4.	Smart suggestions - Show alternatives when conflict happens
+Bottleneck 3: Real-time Updates Overload
+Problem: Too many WebSocket connections for live table status.
+Solutions:
+1.	Separate WebSocket servers - Don't mix with API servers
+2.	Message batching - Send updates in groups, not individually
+3.	Connection limits - Max 1000 connections per server
+4.	Fallback to polling - Use regular HTTP if WebSocket fails
+Bottleneck 4: Cache Overload
+Problem: Cache memory fills up, causes slowdowns.
+Solutions:
+1.	Multi-level cache - Browser → CDN → Redis → Database
+2.	Smart expiration - Popular data stays longer, old data removed
+3.	Cache warming - Pre-load expected popular data
+4.	Monitor hit rates - Track what's working, adjust as needed
+________________________________________
+Caching Strategy - Simple Explanation
+4-Layer Caching System:
+Layer 1: User's Browser (Fastest)
+text
+What's cached: Recent searches, user preferences
+How long: 5 minutes to 1 hour
+Benefit: Instant load for returning users
+Layer 2: CDN (Content Delivery Network)
+text
+What's cached: Restaurant photos, menus, static pages
+How long: 1 hour to 1 day  
+Benefit: Serves from nearest location globally
+Layer 3: Redis Cache (Application Memory)
+text
+What's cached: Table availability, user sessions, restaurant info
+How long: 30 seconds to 5 minutes (real-time data)
+Benefit: 100x faster than database queries
+Layer 4: Database Cache (MySQL)
+text
+What's cached: Frequently queried data
+How long: Automatic by MySQL
+Benefit: Reduces disk reads
+Cache Example - Table Search:
+text
+User searches for tables at 7 PM:
+1. Check browser cache ❌ (first time)
+2. Check CDN cache ❌ (dynamic data)
+3. Check Redis cache ✅ (cached 2 minutes ago)
+4. Return result in 50ms instead of 500ms
+Cache Invalidation (When to Clear):
+•	Table booked → Clear availability cache for that time
+•	User updates profile → Clear user data cache
+•	Restaurant changes hours → Clear restaurant cache
+•	Automatic timeout → Clear after 5 minutes anyway
+________________________________________
+Database Query Optimization - Simple Approach
+Problem: Slow Database Queries
+When 1000 users search tables, database gets slow if not optimized.
+Optimization Strategies:
+1. Add Indexes (Like Book Index)
+text
+Without index: Scan entire reservations table (slow)
+With index: Jump directly to needed data (fast)
+
+Key indexes needed:
+- Restaurant + Date + Time (for availability)
+- User ID + Date (for user history)  
+- Status + Date (for staff dashboard)
+2. Separate Read and Write Databases
+text
+Write Database (1 server): Handles new reservations
+Read Databases (3 servers): Handle searches, reports, dashboards
+
+Benefit: No conflict between booking and searching
+3. Simplify Complex Queries
+text
+Complex query: Find available tables with user details
+Simple version: First find tables, then get user details separately
+Result: Each query faster, total time better
+4. Limit Results
+text
+Instead of: Get all reservations ever
+Better: Get only today's reservations, 100 at a time
+Benefit: Less data transferred, faster response
+5. Pre-compute Popular Data
+text
+Instead of: Calculate availability on every search
+Better: Calculate for next hour every 5 minutes
+Benefit: Instant results during peak times
+Query Performance Targets:
+•	Search queries: < 200ms response time
+•	Booking queries: < 100ms response time
+•	Report queries: < 2 seconds response time
+•	Simple queries: < 50ms response time
+________________________________________
+Load Balancing - Simple Explanation
+What is Load Balancing?
+Like multiple checkout lanes at grocery store:
+•	1 lane → Long line, slow service
+•	4 lanes → Short lines, fast service
+•	Automatic → Open more lanes when busy
+3-Level Load Balancing:
+Level 1: Global Load Balancer
+text
+Users worldwide → Nearest data center
+Example: US users → Virginia, EU users → Ireland
+Benefit: Faster for international users
+Level 2: Application Load Balancer
+text
+All requests → Distribute to available servers
+Method: Round-robin (take turns), or least busy
+Health check: Remove sick servers automatically
+Level 3: Service Load Balancer
+text
+Different services → Different server groups
+- User service: 2 servers
+- Reservation service: 4 servers (needs more power)
+- Table service: 4 servers
+Benefit: Right resources for each job
+Auto-scaling Rules:
+text
+Scale UP when:
+- CPU > 70% for 5 minutes
+- Memory > 80% for 5 minutes  
+- Queue length > 100 requests
+- Response time > 1 second
+
+Scale DOWN when:
+- CPU < 30% for 15 minutes
+- Quiet hours (2 AM - 6 AM)
+- Cost saving mode
+Traffic Management Examples:
+Normal Day (500 users):
+•	2 API servers
+•	1 database with 1 replica
+•	All responses under 500ms
+Friday Night (1500 users):
+•	6 API servers (auto-added)
+•	1 database with 3 replicas
+•	90% requests from cache
+•	All responses under 800ms
+Special Event (3000 users):
+•	10 API servers (manual scale)
+•	Database sharding by restaurant
+•	Queue for bookings to prevent overload
+•	Static content only from CDN
+Failure Handling:
+text
+Server fails → Load balancer stops sending traffic
+Database fails → Switch to replica automatically
+Cache fails → Use database (slower but works)
+All fail → Show friendly "maintenance" page
+Monitoring Dashboard:
+text
+Green: Everything normal
+Yellow: Getting busy, watch closely
+Red: Problems, take action
+
+Key metrics shown:
+- Current users: 847
+- Response time: 230ms
+- Cache hit rate: 82%
+- Database load: 45%
+- Errors last hour: 3
+

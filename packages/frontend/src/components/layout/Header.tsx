@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../../store/hooks';
 import { logout } from '../../store/slices/authSlice';
-import { isStaffOrAdmin } from '@restaurant-reservation/shared';
+import { isStaffOrAdmin, USER_ROLES } from '@restaurant-reservation/shared';
 
 export function Header() {
   const { user, token } = useAppSelector((state) => state.auth);
@@ -56,6 +56,11 @@ export function Header() {
                     Staff Dashboard
                   </Link>
                 )}
+                {user && user.role === USER_ROLES.ADMIN && (
+                   <Link to="/admin" className="hover:text-gray-300 transition-colors">
+                    Admin Dashboard
+                  </Link>
+                )}
                 <Link to="/reservation" className="hover:text-gray-300 transition-colors">
                   My Reservations
                 </Link>
@@ -107,6 +112,15 @@ export function Header() {
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Staff Dashboard
+                  </Link>
+                )}
+                {user && user.role === USER_ROLES.ADMIN && (
+                   <Link
+                    to="/admin"
+                    className="block py-2 hover:text-gray-300 transition-colors"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Admin Dashboard
                   </Link>
                 )}
                 <Link

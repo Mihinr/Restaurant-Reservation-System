@@ -11,6 +11,7 @@ import { ReservationPage } from './pages/Reservation/ReservationPage';
 import { ProfilePage } from './pages/Profile/ProfilePage';
 import { WaitlistPage } from './pages/Waitlist/WaitlistPage';
 import { StaffDashboardPage } from './pages/Staff/StaffDashboardPage';
+import { AdminDashboardPage } from './pages/Admin/AdminDashboardPage';
 import { LoginPage } from './pages/Auth/LoginPage';
 import { RegisterPage } from './pages/Auth/RegisterPage';
 import { NotFoundPage } from './pages/NotFound/NotFoundPage';
@@ -78,6 +79,14 @@ function App() {
             }
           />
           <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={[USER_ROLES.ADMIN]}>
+                <AdminDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/profile"
             element={
               <ProtectedRoute>
@@ -95,4 +104,3 @@ function App() {
 }
 
 export default App;
-

@@ -2,7 +2,7 @@ import { useState, FormEvent } from 'react';
 import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { authService } from '../../services/authService';
-import { setUser } from '../../store/slices/authSlice';
+import { setUser, logout } from '../../store/slices/authSlice';
 import { getErrorMessage } from '../../utils/apiError';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
@@ -136,6 +136,62 @@ export function ProfilePage() {
               <span className="text-gray-900 capitalize">{user.role.toLowerCase()}</span>
             </p>
           </div>
+        </div>
+      )}
+      {user.role === 'CUSTOMER' && (
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <h2 className="text-lg font-bold text-red-600 mb-2">Danger Zone</h2>
+          <p className="text-gray-600 text-sm mb-4">
+            Once you delete your account, there is no going back. Please be certain.
+          </p>
+          <Button
+            variant="danger"
+            onClick={() => {
+              toast(
+                (t) => (
+                  <div className="flex flex-col gap-3">
+                    <p className="font-semibold">
+                      Are you sure you want to delete your account?
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      This action cannot be undone. All your data will be permanently removed.
+                    </p>
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={() => toast.dismiss(t.id)}
+                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={async () => {
+                          toast.dismiss(t.id);
+                          try {
+                            await authService.deleteProfile();
+                            dispatch(logout());
+                            toast.success('Account deleted successfully');
+                            // Navigate to home or login is handled by protected route or app state change
+                            window.location.href = '/login';
+                          } catch (error) {
+                            toast.error(getErrorMessage(error));
+                          }
+                        }}
+                        className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-medium"
+                      >
+                        Yes, Delete My Account
+                      </button>
+                    </div>
+                  </div>
+                ),
+                {
+                  duration: Infinity,
+                  id: 'confirm-delete-account',
+                }
+              );
+            }}
+          >
+            Delete Account
+          </Button>
         </div>
       )}
     </div>

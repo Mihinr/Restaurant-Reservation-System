@@ -36,87 +36,43 @@ MYSQL_ROOT_PASSWORD=your-secure-password-here
 - Use a strong, secure password for `MYSQL_ROOT_PASSWORD`
 - Generate secure random strings for JWT secrets (minimum 32 characters)
 
-### 3. Create Database Migrations (First Time Only)
+### 3. Build and Start All Services
 
-Before starting services, you need to create migration files locally. Connect to the Docker MySQL container:
+```bash
+# Start all services (this will build images automatically on first run)
+docker-compose up -d
 
-**Step 3.1: Start MySQL Container Only**
+# View logs to ensure services are starting
+docker-compose logs -f
+```
 
+### 4. Setup and Seed Databases
+
+Once all containers are running and healthy (you can check with `docker-compose ps`), run the following commands to apply the existing migrations and populate the database with test data:
+
+```bash
+# Run migrations and seed for all services
+docker-compose exec user-service sh -c "npm run db:migrate && npm run db:seed"
+docker-compose exec reservation-service sh -c "npm run db:migrate && npm run db:seed"
+docker-compose exec table-service sh -c "npm run db:migrate && npm run db:seed"
+```
+
+---
+
+## Development: Creating New Migrations
+
+If you are a developer and have modified the Prisma schemas, you will need to create new migration files.
+
+**1. Start the MySQL container:**
 ```bash
 docker-compose up -d mysql
 ```
 
-Wait for MySQL to be healthy (check with `docker-compose ps mysql`).
+**2. Run the migration command locally:**
+Navigate to the specific service directory and run:
+`npm run db:migrate:dev`
 
-**Step 3.2: Create Temporary .env Files for Local Migration**
-
-Create `.env` files in each service directory to connect to Docker MySQL. **Important:** Use the same password value from your root `.env` file's `MYSQL_ROOT_PASSWORD`:
-
-```bash
-# User Service (replace 'your-password' with your actual MYSQL_ROOT_PASSWORD from root .env)
-echo 'DATABASE_URL="mysql://root:your-password@localhost:3306/restaurant_user_service"' > packages/user-service/.env
-
-# Reservation Service
-echo 'DATABASE_URL="mysql://root:your-password@localhost:3306/restaurant_reservation_service"' > packages/reservation-service/.env
-
-# Table Service
-echo 'DATABASE_URL="mysql://root:your-password@localhost:3306/restaurant_table_service"' > packages/table-service/.env
-```
-
-**Note:** These service-level `.env` files are temporary and only used for creating migrations locally. Docker Compose does NOT read these files; it only reads the root `.env` file. Replace `your-password` with the exact value from your root `.env` file's `MYSQL_ROOT_PASSWORD`.
-
-**Step 3.3: Create Migrations**
-
-```bash
-# User Service
-cd packages/user-service
-npm run db:migrate:dev
-# When prompted, enter: init
-cd ../..
-
-# Reservation Service
-cd packages/reservation-service
-npm run db:migrate:dev
-# When prompted, enter: init
-cd ../..
-
-# Table Service
-cd packages/table-service
-npm run db:migrate:dev
-# When prompted, enter: init
-cd ../..
-```
-
-This creates the `prisma/migrations` directory with migration files that will be copied into Docker images.
-
-### 4. Build and Start All Services
-
-```bash
-# Build all images
-docker-compose build
-
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-```
-
-### 5. Initialize Databases
-
-After services start, apply migrations and seed databases:
-
-```bash
-# Apply migrations (uses prisma migrate deploy - production-safe)
-docker-compose exec user-service npm run db:migrate
-docker-compose exec reservation-service npm run db:migrate
-docker-compose exec table-service npm run db:migrate
-
-# Seed databases with test data
-docker-compose exec user-service npm run db:seed
-docker-compose exec reservation-service npm run db:seed
-docker-compose exec table-service npm run db:seed
-```
+*Note: This requires local `npm install` and a local `.env` file pointing to `localhost:3306`.*
 
 **Note:** The `db:migrate` script uses `prisma migrate deploy` which applies existing migrations without regenerating the Prisma client (already generated during build). This avoids permission issues in production containers.
 

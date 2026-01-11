@@ -38,5 +38,10 @@ export const authService = {
     await api.post('/api/v1/auth/logout');
     localStorage.removeItem('token');
   },
+
+  async deleteProfile(): Promise<void> {
+    await api.delete('/api/v1/users/me');
+    localStorage.removeItem('token');
+  },
 };
 

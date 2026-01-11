@@ -37,7 +37,7 @@ export class TableController {
   }
 
   async getByRestaurant(req: Request, res: Response): Promise<void> {
-    const { restaurantId } = req.params;
+    const restaurantId = (req.params.restaurantId || req.query.restaurantId) as string;
     if (!restaurantId) {
       res.status(400).json({
         success: false,
