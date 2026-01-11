@@ -15,15 +15,18 @@ export class WaitlistRepository {
   }
 
   async create(data: CreateWaitlistEntryDto & { userId: string; position: number }): Promise<WaitlistEntry> {
+    const { reservationDate, reservationTime, ...rest } = data;
     return this.prisma.waitlistEntry.create({
       data: {
-        restaurantId: data.restaurantId,
-        userId: data.userId,
-        partySize: data.partySize,
-        phoneNumber: data.phoneNumber,
-        name: data.name,
-        position: data.position,
+        restaurantId: rest.restaurantId,
+        userId: rest.userId,
+        partySize: rest.partySize,
+        phoneNumber: rest.phoneNumber,
+        name: rest.name,
+        position: rest.position,
         status: 'WAITING',
+        reservationDate: reservationDate ? new Date(reservationDate) : null,
+        reservationTime: reservationTime ? new Date(`1970-01-01T${reservationTime}:00`) : null,
       },
     });
   }
@@ -49,7 +52,7 @@ export class WaitlistRepository {
       where: {
         userId,
         status: {
-          in: ['WAITING', 'NOTIFIED'],
+          in: ['WAITING', 'NOTIFIED', 'SEATED'],
         },
       },
       orderBy: { createdAt: 'desc' },

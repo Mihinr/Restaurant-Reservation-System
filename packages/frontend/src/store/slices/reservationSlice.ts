@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { reservationService } from '../../services/reservationService';
 import { getErrorMessage } from '../../utils/apiError';
-import { Reservation, CreateReservationDto } from '@restaurant-reservation/shared';
+import { Reservation, CreateReservationDto, UpdateReservationDto } from '@restaurant-reservation/shared';
 
 export interface ReservationState {
   reservations: Reservation[];
@@ -44,7 +44,7 @@ export const createReservation = createAsyncThunk(
 export const updateReservation = createAsyncThunk(
   'reservation/updateReservation',
   async (
-    { id, data }: { id: string; data: Partial<CreateReservationDto> & { version?: number } },
+    { id, data }: { id: string; data: UpdateReservationDto & { version?: number } },
     { rejectWithValue }
   ) => {
     try {

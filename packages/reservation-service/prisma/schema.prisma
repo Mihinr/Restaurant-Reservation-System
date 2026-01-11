@@ -71,6 +71,8 @@ model WaitlistEntry {
   status            WaitlistStatus @default(WAITING)
   position          Int
   estimatedWaitTime Int?           @map("estimated_wait_time")
+  reservationDate   DateTime?      @map("reservation_date") @db.Date
+  reservationTime   DateTime?      @map("reservation_time") @db.Time
   
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @default(now()) @updatedAt @map("updated_at")

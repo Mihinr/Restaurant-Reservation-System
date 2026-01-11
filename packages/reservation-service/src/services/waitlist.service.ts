@@ -101,6 +101,8 @@ export class WaitlistService {
     status: string;
     position: number;
     estimatedWaitTime: number | null;
+    reservationDate: Date | null;
+    reservationTime: Date | null;
     createdAt: Date;
     updatedAt: Date;
   }): WaitlistEntryType {
@@ -114,6 +116,8 @@ export class WaitlistService {
       status: entry.status as WaitlistEntryType['status'],
       position: entry.position,
       ...(entry.estimatedWaitTime !== null ? { estimatedWaitTime: entry.estimatedWaitTime } : {}),
+      ...(entry.reservationDate ? { reservationDate: entry.reservationDate } : {}),
+      ...(entry.reservationTime ? { reservationTime: entry.reservationTime } : {}),
       createdAt: entry.createdAt,
       updatedAt: entry.updatedAt,
     };

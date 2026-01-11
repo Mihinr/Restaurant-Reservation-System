@@ -37,9 +37,9 @@ export function createWaitlistRoutes(prisma: PrismaClient): Router {
     waitlistController.respondToNotification(req as any, res).catch(next);
   });
 
-  // Staff/Admin can remove from waitlist
-  router.delete('/:id', authenticate, authorize(USER_ROLES.STAFF, USER_ROLES.ADMIN), (req, res, next) => {
-    waitlistController.remove(req, res).catch(next);
+  // Remove from waitlist (Customers can remove their own, Staff/Admin can remove any)
+  router.delete('/:id', authenticate, (req, res, next) => {
+    waitlistController.remove(req as any, res).catch(next);
   });
 
   return router;

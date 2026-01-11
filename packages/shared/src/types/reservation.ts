@@ -49,6 +49,7 @@ export interface UpdateReservationDto {
   customerName?: string;
   customerPhone?: string;
   specialRequests?: string;
+  status?: ReservationStatus;
 }
 
 export interface WaitlistEntry {
@@ -61,6 +62,8 @@ export interface WaitlistEntry {
   status: WaitlistStatus;
   position: number;
   estimatedWaitTime?: number;
+  reservationDate?: Date;
+  reservationTime?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,5 +73,7 @@ export interface CreateWaitlistEntryDto {
   partySize: number;
   phoneNumber: string;
   name: string;
+  reservationDate?: string;
+  reservationTime?: string;
 }
 

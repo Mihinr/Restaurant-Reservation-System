@@ -158,6 +158,9 @@ export class ReservationController {
     if (validatedData.specialRequests !== undefined) {
       data.specialRequests = validatedData.specialRequests;
     }
+    if ((validatedData as any).status !== undefined) {
+      (data as any).status = (validatedData as any).status;
+    }
     const reservation = await this.reservationService.updateReservation(id, data, validatedData.version);
     res.json({
       success: true,

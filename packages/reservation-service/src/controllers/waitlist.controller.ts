@@ -3,6 +3,7 @@ import { Request } from 'express';
 import { WaitlistService } from '../services/waitlist.service';
 import { createWaitlistEntrySchema } from '../validators/waitlist.validator';
 import { AuthRequest } from '../middlewares/auth.middleware';
+import { CreateWaitlistEntryDto } from '@restaurant-reservation/shared';
 
 export class WaitlistController {
   constructor(private waitlistService: WaitlistService) {}
@@ -16,7 +17,23 @@ export class WaitlistController {
       return;
     }
 
-    const data = createWaitlistEntrySchema.parse(req.body);
+    const validatedData = createWaitlistEntrySchema.parse(req.body);
+    
+    // Explicitly construct DTO without undefined properties to satisfy exactOptionalPropertyTypes
+    const data: CreateWaitlistEntryDto = {
+      restaurantId: validatedData.restaurantId,
+      partySize: validatedData.partySize,
+      phoneNumber: validatedData.phoneNumber,
+      name: validatedData.name,
+    };
+
+    if (validatedData.reservationDate) {
+      data.reservationDate = validatedData.reservationDate;
+    }
+    if (validatedData.reservationTime) {
+      data.reservationTime = validatedData.reservationTime;
+    }
+
     const entry = await this.waitlistService.joinWaitlist(req.user.userId, data);
     res.status(201).json({
       success: true,
@@ -80,8 +97,13 @@ export class WaitlistController {
     });
   }
 
-  async remove(req: Request, res: Response): Promise<void> {
+  async remove(req: AuthRequest, res: Response): Promise<void> {
     const { id } = req.params;
+    if (!req.user) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
     if (!id) {
       res.status(400).json({
         success: false,
@@ -89,6 +111,25 @@ export class WaitlistController {
       });
       return;
     }
+
+    const entry = await this.waitlistService.getWaitlistEntryById(id);
+    if (!entry) {
+      res.status(404).json({ success: false, error: 'Waitlist entry not found' });
+      return;
+    }
+
+    // Check permissions
+    const isStaffOrAdmin = req.user.role === 'STAFF' || req.user.role === 'ADMIN';
+    const isOwner = entry.userId === req.user.userId;
+
+    if (!isStaffOrAdmin && !isOwner) {
+      res.status(403).json({
+        success: false,
+        error: 'Insufficient permissions',
+      });
+      return;
+    }
+
     await this.waitlistService.removeFromWaitlist(id);
     res.json({
       success: true,

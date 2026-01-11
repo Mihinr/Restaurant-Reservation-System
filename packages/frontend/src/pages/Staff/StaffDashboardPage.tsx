@@ -21,7 +21,8 @@ import { restaurantService } from '../../services/restaurantService';
 import { useSocket } from '../../context/SocketContext';
 import { FormEvent } from 'react';
 
-type TabType = 'current' | 'past';
+type TabType = 'today' | 'future' | 'past';
+type WaitlistTabType = 'waiting' | 'notified' | 'seated';
 
 export function StaffDashboardPage() {
   const dispatch = useAppDispatch();
@@ -31,7 +32,8 @@ export function StaffDashboardPage() {
   const { user } = useAppSelector(state => state.auth);
 
   const [selectedRestaurantId, setSelectedRestaurantId] = useState('');
-  const [activeTab, setActiveTab] = useState<TabType>('current');
+  const [activeTab, setActiveTab] = useState<TabType>('today');
+  const [activeWaitlistTab, setActiveWaitlistTab] = useState<WaitlistTabType>('waiting');
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [editForm, setEditForm] = useState({
     reservationDate: '',
@@ -42,127 +44,54 @@ export function StaffDashboardPage() {
     specialRequests: '',
   });
 
-  // Filter today's reservations
-  const todayReservations = useMemo(() => {
+  // Filter and categorize reservations
+  const { todayReservations, futureReservations, pastReservations } = useMemo(() => {
     const today = new Date();
-    const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
 
-    return reservations.filter(res => {
-      // Filter by restaurant if one is selected
-      if (selectedRestaurantId && res.restaurantId !== selectedRestaurantId) {
-        return false;
-      }
+    const past: Reservation[] = [];
+    const todayRes: Reservation[] = [];
+    const future: Reservation[] = [];
 
-      // Normalize reservation date to local date (ignore time)
-      // Handle both string and Date object formats
-      const resDate =
-        typeof res.reservationDate === 'string'
-          ? new Date(res.reservationDate)
-          : new Date(res.reservationDate);
+    reservations.filter(res => !selectedRestaurantId || res.restaurantId === selectedRestaurantId)
+      .forEach(res => {
+        const resDate = new Date(res.reservationDate);
+        resDate.setHours(0, 0, 0, 0);
 
-      // Check if date is valid
-      if (isNaN(resDate.getTime())) {
-        console.warn('Invalid reservation date:', res.reservationDate, res);
-        return false;
-      }
+        if (resDate < today) {
+          past.push(res);
+        } else if (resDate >= tomorrow) {
+          future.push(res);
+        } else {
+          todayRes.push(res);
+        }
+      });
 
-      const resDateOnly = new Date(
-        resDate.getFullYear(),
-        resDate.getMonth(),
-        resDate.getDate()
-      );
-
-      // Compare dates
-      const isToday = resDateOnly.getTime() === todayOnly.getTime();
-
-      return isToday;
+    // Sorting
+    todayRes.sort((a, b) => new Date(a.reservationTime).getTime() - new Date(b.reservationTime).getTime());
+    
+    future.sort((a, b) => {
+      const dateDiff = new Date(a.reservationDate).getTime() - new Date(b.reservationDate).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return new Date(a.reservationTime).getTime() - new Date(b.reservationTime).getTime();
     });
+
+    past.sort((a, b) => {
+      const dateDiff = new Date(b.reservationDate).getTime() - new Date(a.reservationDate).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return new Date(b.reservationTime).getTime() - new Date(a.reservationTime).getTime();
+    });
+
+    return { todayReservations: todayRes, futureReservations: future, pastReservations: past };
   }, [reservations, selectedRestaurantId]);
 
-  // Filter into past and current reservations
-  const { pastReservations, currentReservations } = useMemo(() => {
-    const now = new Date();
-    const past: typeof todayReservations = [];
-    const current: typeof todayReservations = [];
-
-    todayReservations.forEach((reservation) => {
-      // Combine reservation date and time
-      const reservationDate = new Date(reservation.reservationDate);
-      const reservationTime = new Date(reservation.reservationTime);
-      
-      // Create a combined datetime for comparison
-      const reservationDateTime = new Date(
-        reservationDate.getFullYear(),
-        reservationDate.getMonth(),
-        reservationDate.getDate(),
-        reservationTime.getHours(),
-        reservationTime.getMinutes()
-      );
-
-      // Add duration to get the end time
-      const durationMinutes = reservation.durationMinutes || 90;
-      const reservationEndDateTime = new Date(
-        reservationDateTime.getTime() + durationMinutes * 60 * 1000
-      );
-
-      // If reservation has ended, it's past
-      if (reservationEndDateTime < now) {
-        past.push(reservation);
-      } else {
-        current.push(reservation);
-      }
-    });
-
-    // Sort past reservations by date (newest first)
-    past.sort((a, b) => {
-      const dateA = new Date(a.reservationDate);
-      const dateB = new Date(b.reservationDate);
-      const timeA = new Date(a.reservationTime);
-      const timeB = new Date(b.reservationTime);
-      const datetimeA = new Date(
-        dateA.getFullYear(),
-        dateA.getMonth(),
-        dateA.getDate(),
-        timeA.getHours(),
-        timeA.getMinutes()
-      );
-      const datetimeB = new Date(
-        dateB.getFullYear(),
-        dateB.getMonth(),
-        dateB.getDate(),
-        timeB.getHours(),
-        timeB.getMinutes()
-      );
-      return datetimeB.getTime() - datetimeA.getTime();
-    });
-
-    // Sort current reservations by date (oldest first)
-    current.sort((a, b) => {
-      const dateA = new Date(a.reservationDate);
-      const dateB = new Date(b.reservationDate);
-      const timeA = new Date(a.reservationTime);
-      const timeB = new Date(b.reservationTime);
-      const datetimeA = new Date(
-        dateA.getFullYear(),
-        dateA.getMonth(),
-        dateA.getDate(),
-        timeA.getHours(),
-        timeA.getMinutes()
-      );
-      const datetimeB = new Date(
-        dateB.getFullYear(),
-        dateB.getMonth(),
-        dateB.getDate(),
-        timeB.getHours(),
-        timeB.getMinutes()
-      );
-      return datetimeA.getTime() - datetimeB.getTime();
-    });
-
-    return { pastReservations: past, currentReservations: current };
-  }, [todayReservations]);
-
-  const displayedReservations = activeTab === 'current' ? currentReservations : pastReservations;
+  const displayedReservations = useMemo(() => {
+    if (activeTab === 'today') return todayReservations;
+    if (activeTab === 'future') return futureReservations;
+    return pastReservations;
+  }, [activeTab, todayReservations, futureReservations, pastReservations]);
 
   useEffect(() => {
     dispatch(fetchRestaurants());
@@ -544,6 +473,54 @@ export function StaffDashboardPage() {
     }
   };
 
+  const handleClearReservation = async (reservation: Reservation) => {
+    const confirmed = await new Promise<boolean>(resolve => {
+      toast(
+        t => (
+          <div className="flex flex-col gap-3">
+            <p className="font-semibold text-white">Clear this table?</p>
+            <p className="text-sm text-white">Guest has left and table is ready for next search.</p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  resolve(false);
+                }}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-sm font-medium"
+              >
+                No
+              </button>
+              <button
+                onClick={() => {
+                  toast.dismiss(t.id);
+                  resolve(true);
+                }}
+                className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-sm font-medium"
+              >
+                Yes, Clear
+              </button>
+            </div>
+          </div>
+        ),
+        { duration: Infinity, id: 'confirm-clear-table' }
+      );
+    });
+
+    if (confirmed) {
+      const result = await dispatch(updateReservation({
+        id: reservation.id,
+        data: {
+          status: 'COMPLETED',
+          version: reservation.version,
+        } as any
+      }));
+      if (updateReservation.fulfilled.match(result)) {
+        toast.success('Table cleared and marked as completed');
+        dispatch(fetchReservations());
+      }
+    }
+  };
+
   const waitingEntries = entries
     .filter(e => e.status === 'WAITING')
     .sort((a, b) => a.position - b.position);
@@ -608,119 +585,246 @@ export function StaffDashboardPage() {
 
           <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6">
             <h2 className="text-lg sm:text-xl font-bold mb-4">Waitlist Management</h2>
+            
+            {/* Waitlist Tabs */}
+            <div className="mb-6 border-b border-gray-200">
+              <nav className="flex space-x-4 overflow-x-auto" aria-label="Waitlist Tabs">
+                <button
+                  onClick={() => setActiveWaitlistTab('waiting')}
+                  className={`py-3 px-4 border-b-2 font-medium text-sm sm:text-base whitespace-nowrap transition-colors ${
+                    activeWaitlistTab === 'waiting'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Waiting
+                  {waitingEntries.length > 0 && (
+                    <span className="ml-2 py-0.5 px-2 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                      {waitingEntries.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveWaitlistTab('notified')}
+                  className={`py-3 px-4 border-b-2 font-medium text-sm sm:text-base whitespace-nowrap transition-colors ${
+                    activeWaitlistTab === 'notified'
+                      ? 'border-yellow-500 text-yellow-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Notified
+                  {notifiedEntries.length > 0 && (
+                    <span className="ml-2 py-0.5 px-2 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                      {notifiedEntries.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveWaitlistTab('seated')}
+                  className={`py-3 px-4 border-b-2 font-medium text-sm sm:text-base whitespace-nowrap transition-colors ${
+                    activeWaitlistTab === 'seated'
+                      ? 'border-green-500 text-green-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Seated Today
+                  {seatedEntries.length > 0 && (
+                    <span className="ml-2 py-0.5 px-2 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                      {seatedEntries.length}
+                    </span>
+                  )}
+                </button>
+              </nav>
+            </div>
+
             {isLoading ? (
               <div className="text-center py-8">Loading waitlist...</div>
-            ) : waitingEntries.length === 0 ? (
-              <p className="text-gray-600 text-sm sm:text-base">No one waiting in the queue.</p>
             ) : (
-              <div className="space-y-3">
-                {waitingEntries.map(entry => (
-                  <div key={entry.id} className="border border-gray-200 rounded-lg p-3 sm:p-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="font-bold text-lg sm:text-xl text-blue-600">
-                            #{entry.position}
-                          </span>
-                          <span className="font-semibold text-sm sm:text-base">{entry.name}</span>
-                        </div>
-                        <p className="text-xs sm:text-sm text-gray-600">
-                          Party of {entry.partySize} • {entry.phoneNumber}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Joined: {format(new Date(entry.createdAt), 'MMM dd, yyyy HH:mm')}
-                        </p>
+              <div className="space-y-4">
+                {activeWaitlistTab === 'waiting' && (
+                  <>
+                    {waitingEntries.length === 0 ? (
+                      <p className="text-gray-600 text-sm sm:text-base">No one waiting in the queue.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {waitingEntries.map(entry => (
+                          <div key={entry.id} className="border border-gray-200 rounded-lg p-3 sm:p-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="font-bold text-lg sm:text-xl text-blue-600">
+                                    #{entry.position}
+                                  </span>
+                                  <span className="font-semibold text-sm sm:text-base">{entry.name}</span>
+                                </div>
+                                <p className="text-xs sm:text-sm text-gray-600">
+                                  Party of {entry.partySize} • {entry.phoneNumber}
+                                </p>
+                                {(entry.reservationDate || entry.reservationTime) && (
+                                   <p className="text-xs text-gray-500 font-medium">
+                                     Pref: {entry.reservationDate ? format(new Date(entry.reservationDate), 'yyyy-MM-dd') : ''}
+                                     {entry.reservationTime && ` at ${format(new Date(entry.reservationTime), 'HH:mm')}`}
+                                   </p>
+                                )}
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Joined: {format(new Date(entry.createdAt), 'MMM dd, yyyy HH:mm')}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  variant="secondary"
+                                  className="text-xs sm:text-sm px-3 py-1"
+                                  onClick={() => handleUpdateStatus(entry.id, 'NOTIFIED')}
+                                >
+                                  Notify
+                                </Button>
+                                <Button
+                                  variant="primary"
+                                  className="text-xs sm:text-sm px-3 py-1"
+                                  onClick={() => handleUpdateStatus(entry.id, 'SEATED')}
+                                >
+                                  Seat
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  className="text-xs sm:text-sm px-3 py-1"
+                                  onClick={() => handleRemove(entry.id)}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="secondary"
-                          className="text-xs sm:text-sm px-3 py-1"
-                          onClick={() => handleUpdateStatus(entry.id, 'NOTIFIED')}
-                        >
-                          Notify
-                        </Button>
-                        <Button
-                          variant="primary"
-                          className="text-xs sm:text-sm px-3 py-1"
-                          onClick={() => handleUpdateStatus(entry.id, 'SEATED')}
-                        >
-                          Seat
-                        </Button>
-                        <Button
-                          variant="danger"
-                          className="text-xs sm:text-sm px-3 py-1"
-                          onClick={() => handleRemove(entry.id)}
-                        >
-                          Remove
-                        </Button>
+                    )}
+                  </>
+                )}
+
+                {activeWaitlistTab === 'notified' && (
+                  <>
+                    {notifiedEntries.length === 0 ? (
+                      <p className="text-gray-600 text-sm sm:text-base">No notified customers.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {notifiedEntries.map(entry => (
+                          <div
+                            key={entry.id}
+                            className="border border-yellow-200 rounded-lg p-3 sm:p-4 bg-yellow-50"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex-1">
+                                <span className="font-semibold text-sm sm:text-base">{entry.name}</span>
+                                <p className="text-xs sm:text-sm text-gray-600">
+                                  Party of {entry.partySize} • {entry.phoneNumber}
+                                </p>
+                                <p className="text-xs text-yellow-700 mt-1">
+                                  Notified at: {format(new Date(entry.updatedAt), 'HH:mm')}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="primary"
+                                  className="text-xs sm:text-sm px-3 py-1"
+                                  onClick={() => handleUpdateStatus(entry.id, 'SEATED')}
+                                >
+                                  Seat Now
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  className="text-xs sm:text-sm px-3 py-1"
+                                  onClick={() => handleRemove(entry.id)}
+                                >
+                                  Remove
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    )}
+                  </>
+                )}
+
+                {activeWaitlistTab === 'seated' && (
+                  <>
+                    {seatedEntries.length === 0 ? (
+                      <p className="text-gray-600 text-sm sm:text-base">No seated customers today.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {seatedEntries.map(entry => (
+                          <div
+                            key={entry.id}
+                            className="border border-green-200 rounded-lg p-3 sm:p-4 bg-green-50"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-sm sm:text-base">{entry.name}</span>
+                                  <span className="px-2 py-0.5 rounded-full bg-green-200 text-green-800 text-xs font-bold uppercase">
+                                    Seated
+                                  </span>
+                                </div>
+                                <p className="text-xs sm:text-sm text-gray-600 mt-1">
+                                  Party of {entry.partySize} • {entry.phoneNumber}
+                                </p>
+                                <p className="text-xs text-green-700 mt-1">
+                                  Seated at: {format(new Date(entry.updatedAt), 'HH:mm')}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="danger"
+                                  className="text-xs sm:text-sm px-3 py-1"
+                                  onClick={() => handleRemove(entry.id)}
+                                >
+                                  Clear
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>
 
-          {notifiedEntries.length > 0 && (
-            <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md mb-6">
-              <h2 className="text-lg sm:text-xl font-bold mb-4">Notified Customers</h2>
-              <div className="space-y-3">
-                {notifiedEntries.map(entry => (
-                  <div
-                    key={entry.id}
-                    className="border border-yellow-200 rounded-lg p-3 sm:p-4 bg-yellow-50"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                      <div>
-                        <span className="font-semibold text-sm sm:text-base">{entry.name}</span>
-                        <p className="text-xs sm:text-sm text-gray-600">
-                          Party of {entry.partySize} • {entry.phoneNumber}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="primary"
-                          className="text-xs sm:text-sm px-3 py-1"
-                          onClick={() => handleUpdateStatus(entry.id, 'SEATED')}
-                        >
-                          Seat Now
-                        </Button>
-                        <Button
-                          variant="danger"
-                          className="text-xs sm:text-sm px-3 py-1"
-                          onClick={() => handleRemove(entry.id)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           <div className="bg-white p-4 sm:p-6 rounded-lg shadow-md">
-            <h2 className="text-lg sm:text-xl font-bold mb-4">Today's Reservations</h2>
-            {todayReservations.length === 0 ? (
-              <p className="text-gray-600 text-sm sm:text-base">No reservations for today.</p>
-            ) : (
-              <>
-                {/* Tabs */}
+            <h2 className="text-lg sm:text-xl font-bold mb-4">Reservations</h2>
+            <>
+              {/* Tabs */}
                 <div className="mb-6 border-b border-gray-200">
-                  <nav className="flex space-x-4" aria-label="Tabs">
+                  <nav className="flex space-x-4 overflow-x-auto" aria-label="Tabs">
                     <button
-                      onClick={() => setActiveTab('current')}
+                      onClick={() => setActiveTab('today')}
                       className={`py-3 px-4 border-b-2 font-medium text-sm sm:text-base transition-colors ${
-                        activeTab === 'current'
+                        activeTab === 'today'
                           ? 'border-blue-500 text-blue-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
-                      Current Reservations
-                      {currentReservations.length > 0 && (
+                      Today
+                      {todayReservations.length > 0 && (
                         <span className="ml-2 py-0.5 px-2 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                          {currentReservations.length}
+                          {todayReservations.length}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('future')}
+                      className={`py-3 px-4 border-b-2 font-medium text-sm sm:text-base transition-colors ${
+                        activeTab === 'future'
+                          ? 'border-purple-500 text-purple-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      Future
+                      {futureReservations.length > 0 && (
+                        <span className="ml-2 py-0.5 px-2 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                          {futureReservations.length}
                         </span>
                       )}
                     </button>
@@ -728,11 +832,11 @@ export function StaffDashboardPage() {
                       onClick={() => setActiveTab('past')}
                       className={`py-3 px-4 border-b-2 font-medium text-sm sm:text-base transition-colors ${
                         activeTab === 'past'
-                          ? 'border-blue-500 text-blue-600'
+                          ? 'border-gray-500 text-gray-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
-                      Past Reservations
+                      Past
                       {pastReservations.length > 0 && (
                         <span className="ml-2 py-0.5 px-2 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
                           {pastReservations.length}
@@ -745,9 +849,7 @@ export function StaffDashboardPage() {
                 {/* Reservations List */}
                 {displayedReservations.length === 0 ? (
                   <p className="text-gray-600 text-sm sm:text-base">
-                    {activeTab === 'current'
-                      ? 'No current or upcoming reservations for today.'
-                      : 'No past reservations for today.'}
+                    No {activeTab} reservations found.
                   </p>
                 ) : (
                   <div className="space-y-3">
@@ -839,7 +941,7 @@ export function StaffDashboardPage() {
                                   {reservation.reservationNumber}
                                 </p>
                                 <p className="text-xs sm:text-sm text-gray-600">
-                                  {format(new Date(reservation.reservationTime), 'HH:mm')} • Party
+                                  {format(new Date(reservation.reservationDate), 'MMM dd, yyyy')} • {format(new Date(reservation.reservationTime), 'HH:mm')} • Party
                                   of {reservation.partySize}
                                 </p>
                                 <div className="mt-1">
@@ -895,11 +997,24 @@ export function StaffDashboardPage() {
                                     </div>
                                   ) : null}
                                 </div>
-                                {reservation.customerName && (
-                                  <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                                    {reservation.customerName}
-                                  </p>
-                                )}
+                                <div className="mt-2 space-y-1">
+                                  {reservation.customerName && (
+                                    <p className="text-xs sm:text-sm text-gray-700 font-medium">
+                                      {reservation.customerName}
+                                      {reservation.customerPhone && (
+                                        <span className="text-gray-500 font-normal ml-2">
+                                          ({reservation.customerPhone})
+                                        </span>
+                                      )}
+                                    </p>
+                                  )}
+                                  {reservation.specialRequests && (
+                                    <div className="bg-gray-50 border-l-2 border-blue-400 p-2 text-xs sm:text-sm text-gray-700 flex gap-2 italic">
+                                      <span className="font-semibold not-italic">Requests:</span>
+                                      <span>{reservation.specialRequests}</span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                               <span
                                 className={`inline-block px-2 py-1 rounded text-xs sm:text-sm font-medium ${
@@ -933,6 +1048,12 @@ export function StaffDashboardPage() {
                                   >
                                     Cancel
                                   </Button>
+                                  <Button
+                                    onClick={() => handleClearReservation(reservation)}
+                                    className="px-3 py-1 text-xs bg-green-500 hover:bg-green-600 text-white"
+                                  >
+                                    Clear Table
+                                  </Button>
                                 </div>
                               )}
                           </>
@@ -942,7 +1063,6 @@ export function StaffDashboardPage() {
                   </div>
                 )}
               </>
-            )}
           </div>
         </>
       )}

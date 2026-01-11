@@ -2,7 +2,7 @@ import { useState, FormEvent, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchRestaurants } from '../../store/slices/restaurantSlice';
-import { joinWaitlist, fetchWaitlistByRestaurant, fetchMyWaitlist } from '../../store/slices/waitlistSlice';
+import { joinWaitlist, fetchWaitlistByRestaurant, fetchMyWaitlist, removeFromWaitlist, respondToNotification } from '../../store/slices/waitlistSlice';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import { isStaffOrAdmin, SocketEvents } from '@restaurant-reservation/shared';
@@ -15,6 +15,8 @@ export function WaitlistPage() {
     partySize: 2,
     name: '',
     phoneNumber: '',
+    reservationDate: '',
+    reservationTime: '',
   });
   const [showForm, setShowForm] = useState(false);
 
@@ -50,6 +52,8 @@ export function WaitlistPage() {
         partySize: 2,
         name: `${user.firstName} ${user.lastName}`.trim(),
         phoneNumber: user.phone || '',
+        reservationDate: '',
+        reservationTime: '',
       });
     }
   }, [showForm, user]);
@@ -64,6 +68,8 @@ export function WaitlistPage() {
         partySize: waitlistForm.partySize,
         name: waitlistForm.name,
         phoneNumber: waitlistForm.phoneNumber,
+        reservationDate: waitlistForm.reservationDate,
+        reservationTime: waitlistForm.reservationTime,
       })
     );
 
@@ -74,7 +80,7 @@ export function WaitlistPage() {
         duration: 5000,
       });
       setShowForm(false);
-      setWaitlistForm({ partySize: 2, name: '', phoneNumber: '' });
+      setWaitlistForm({ partySize: 2, name: '', phoneNumber: '', reservationDate: '', reservationTime: '' });
       // Refresh waitlist based on user role
       if (isStaff) {
         dispatch(fetchWaitlistByRestaurant(selectedRestaurantId));
@@ -116,6 +122,35 @@ export function WaitlistPage() {
     };
   }, [socket, dispatch, isStaff, selectedRestaurantId, user]);
 
+
+  const handleCancelEntry = async (id: string) => {
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="font-semibold">
+          Cancel this waitlist request?
+        </p>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 text-sm font-medium"
+          >
+            No
+          </button>
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              await dispatch(removeFromWaitlist(id));
+              toast.success('Waitlist entry cancelled');
+              dispatch(fetchMyWaitlist());
+            }}
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-medium"
+          >
+            Yes, Cancel
+          </button>
+        </div>
+      </div>
+    ), { duration: Infinity, id: 'confirm-cancel-waitlist' });
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6">
@@ -169,6 +204,23 @@ export function WaitlistPage() {
               onChange={(e) => setWaitlistForm({ ...waitlistForm, phoneNumber: e.target.value })}
               required
             />
+             <div className="grid grid-cols-2 gap-4">
+              <Input
+                type="date"
+                label="Preferred Date"
+                value={waitlistForm.reservationDate}
+                onChange={(e) => setWaitlistForm({ ...waitlistForm, reservationDate: e.target.value })}
+                min={new Date().toISOString().split('T')[0]}
+                required
+              />
+              <Input
+                type="time"
+                label="Preferred Time"
+                value={waitlistForm.reservationTime}
+                onChange={(e) => setWaitlistForm({ ...waitlistForm, reservationTime: e.target.value })}
+                required
+              />
+            </div>
             <div className="flex gap-3">
               <Button type="submit" isLoading={isLoading} className="flex-1">
                 Join Waitlist
@@ -220,14 +272,55 @@ export function WaitlistPage() {
                           <p className="text-xs sm:text-sm text-gray-600">
                             Party of {entry.partySize} • {entry.phoneNumber}
                           </p>
+                          {(entry.reservationDate || entry.reservationTime) && (
+                             <p className="text-xs text-gray-500">
+                               Pref: {entry.reservationDate ? new Date(entry.reservationDate).toLocaleDateString() : ''}
+                               {entry.reservationTime && ` at ${new Date(entry.reservationTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`}
+                             </p>
+                          )}
                           <p className="text-xs text-gray-500 mt-1">
                             Status: <span className="font-semibold">{entry.status}</span>
                           </p>
+                          {entry.status === 'NOTIFIED' && (
+                             <div className="mt-2 flex gap-2">
+                                <Button
+                                  className="text-xs px-2 py-1 bg-green-600 hover:bg-green-700"
+                                  onClick={async () => {
+                                     await dispatch(respondToNotification({ id: entry.id, action: 'accept' }));
+                                     toast.success('You have accepted the table!');
+                                     dispatch(fetchMyWaitlist());
+                                  }}
+                                >
+                                  Accept
+                                </Button>
+                                <Button
+                                  className="text-xs px-2 py-1 bg-red-600 hover:bg-red-700"
+                                  onClick={async () => {
+                                     await dispatch(respondToNotification({ id: entry.id, action: 'decline' }));
+                                     toast.success('You have declined the table.');
+                                     dispatch(fetchMyWaitlist());
+                                  }}
+                                >
+                                  Decline
+                                </Button>
+                             </div>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-sm sm:text-base">#{entry.position}</p>
-                          {entry.estimatedWaitTime && (
-                            <p className="text-xs text-gray-600">~{entry.estimatedWaitTime} min</p>
+                        <div className="text-right flex flex-col items-end gap-2">
+                          <div>
+                              <p className="font-bold text-sm sm:text-base">#{entry.position}</p>
+                              {entry.estimatedWaitTime && (
+                                <p className="text-xs text-gray-600">~{entry.estimatedWaitTime} min</p>
+                              )}
+                          </div>
+                          {entry.status === 'WAITING' && (
+                              <Button 
+                                variant="danger" 
+                                className="text-xs px-2 py-1"
+                                onClick={() => handleCancelEntry(entry.id)}
+                              >
+                                Cancel
+                              </Button>
                           )}
                         </div>
                       </div>

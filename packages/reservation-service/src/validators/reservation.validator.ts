@@ -57,6 +57,7 @@ const preprocessForUpdate = z.preprocess(
   baseReservationSchemaObject.partial().extend({
     version: z.number().int().positive().optional(),
     tableIds: z.array(z.string().uuid('Invalid table ID')).optional(), // Allow empty array for update
+    status: z.enum(['PENDING', 'CONFIRMED', 'SEATED', 'COMPLETED', 'CANCELLED', 'NO_SHOW']).optional(),
   })
 );
 

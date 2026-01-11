@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Reservation, CreateReservationDto } from '@restaurant-reservation/shared';
+import { Reservation, CreateReservationDto, UpdateReservationDto } from '@restaurant-reservation/shared';
 
 const RESERVATION_SERVICE_URL = import.meta.env.VITE_RESERVATION_SERVICE_URL || 'http://localhost:3002';
 
@@ -61,7 +61,7 @@ export const reservationService = {
 
   async updateReservation(
     id: string,
-    data: Partial<CreateReservationDto> & { version?: number }
+    data: UpdateReservationDto & { version?: number }
   ): Promise<{ data: Reservation }> {
     const response = await reservationApi.put<{ success: boolean; data: Reservation }>(
       `/api/v1/reservations/${id}`,

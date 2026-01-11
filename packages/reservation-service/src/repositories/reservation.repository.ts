@@ -160,6 +160,8 @@ export class ReservationRepository {
       customerName?: string;
       customerPhone?: string;
       specialRequests?: string;
+      status?: ReservationStatus;
+      statusUpdatedAt?: Date;
       version?: { increment: number };
     } = {};
 
@@ -221,6 +223,10 @@ export class ReservationRepository {
     }
     if (data.specialRequests !== undefined) {
       updateData.specialRequests = data.specialRequests ?? null;
+    }
+    if ((data as any).status !== undefined) {
+      updateData.status = (data as any).status;
+      updateData.statusUpdatedAt = new Date();
     }
 
     if (expectedVersion !== undefined) {
