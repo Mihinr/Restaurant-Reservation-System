@@ -33,8 +33,8 @@ Thumbs.db
 coverage/
 .nyc_output/
 
-# Prisma
-packages/*/prisma/migrations/
+# # Prisma
+# packages/*/prisma/migrations/
 
 # TypeScript
 *.tsbuildinfo
