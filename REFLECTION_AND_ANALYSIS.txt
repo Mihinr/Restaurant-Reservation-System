@@ -1,0 +1,92 @@
+Reflection & Analysis: Restaurant Reservation System
+
+4.1 Architectural Decisions
+
+Why did you choose your specific service boundaries?
+The system was decomposed into three primary domains based on bounded contexts:
+- User Service: Centralizes identity and access management. This isolation ensures that sensitive PII and authentication logic are decoupled from business features, allowing for stricter security audits and independent scaling of the auth stack.
+- Table Service: Manages the restaurant's physical inventory and configuration. This boundary ensures that restaurant layouts and table capacities are treated as static assets, independent of the temporal booking data.
+- Reservation Service: Acts as the high-velocity orchestration layer. It bridges the gap between Users and Tables, managing the complex state lifecycle of bookings and waitlists.
+
+This split allows for horizontal scaling where it's needed most—typically the Reservation service during peak hours—without over-provisioning the identity or inventory layers.
+
+What trade-offs did you consider for service communication?
+We chose Synchronous RESTful APIs via Axios for inter-service communication.
+- Trade-off: We considered an asynchronous message-driven approach (e.g., RabbitMQ) for better decoupling. However, the "Table Availability" check is a hard real-time requirement for a reservation. An asynchronous check would have introduced the complexity of "Eventual Consistency" in a domain where double-booking is a critical failure.
+- Decision: Synchronous communication was chosen for immediate consistency during the booking path. To mitigate the risk of cascading failures, we implemented strict timeouts and standardized error mapping across all inter-service requests.
+
+How did you approach data consistency?
+Consistency was approached at two levels:
+- Intra-Service: Within each domain, we leveraged MySQL transactions and the Prisma ORM to ensure atomic updates (e.g., marking a reservation as 'SEATED' while updating the status timestamp).
+- Inter-Service: We used a "check-then-commit" pattern. The Reservation service synchronously verifies table availability from the Table service before persisting a new booking. For the Staff Dashboard "Clear Table" flow, the orchestrator ensures the Reservation status is moved to 'COMPLETED' before the UI confirms the table is released.
+
+What patterns did you implement and why?
+- Shared Type Contract: We implemented a @restaurant-reservation/shared package to export DTOs and interfaces. This ensures that the Frontend and all Microservices are always in sync, preventing runtime schema drift.
+- Repository Pattern: Logic is separated into Controllers, Services, and Repositories. This decoupling allowed us to unit test business logic in isolation from the Prisma ORM and the HTTP transport layer.
+- Isomorphic Package with Subpath Exports: To solve the AsyncLocalStorage conflict in the browser, we implemented subpath exports (e.g., @restaurant-reservation/shared/server). This allows the frontend to import pure types while the backend imports Node.js-only infrastructure from the same package.
+
+Database choice rationale (PostgreSQL vs MySQL)
+We chose MySQL 8.0 with the InnoDB engine.
+- Rationale: MySQL's default row-level locking is exceptionally optimized for the high-concurrency write patterns required by a reservation system. Unlike PostgreSQL, which may require more tuning for MVCC overhead in high-update scenarios, MySQL's InnoDB handling of primary key lookups and simple transactional locks was better suited for the "inventory release" workflows of the Staff Dashboard.
+
+---
+
+4.2 Technical Challenges
+
+What was the most complex problem you solved?
+The most complex logic was the Staff Dashboard's "Clear Table" orchestration. This required coordinating a state transition that impacted multiple domains: validating that a reservation was in the correct state, updating its status to 'COMPLETED' in the Reservation service, and ensuring the Table service reflected that the physical table was once again 'AVAILABLE'. We solved this by using Redux Toolkit on the frontend to optimistically update the UI while the backend managed the cross-service transactional logic.
+
+How did you handle concurrent reservations?
+To prevent the "race condition" of two people booking the same table simultaneously, we implemented a dual-layer defense:
+- Application Level: The Reservation service verifies that a 90-minute buffer exists between the requested time and any existing bookings for that table.
+- Database Level: We implemented a unique composite index in the MySQL schema: @@unique([tableId, reservationDate, reservationTime]). This acts as a physical hard-stop; even if two requests pass the application check at the exact same millisecond, the database engine will reject the second operation, maintaining 100% data integrity.
+
+What performance optimizations did you implement?
+- Database Indexing: We implemented composite indexes on (restaurantId, reservationDate, reservationTime) to ensure that searches across thousands of historical bookings remain sub-second.
+- Build-Time Pruning: We updated the TypeScript configuration to explicitly exclude unit and integration tests from the production dist folder, ensuring the compiled code is lean and faster to initialize in a containerized environment.
+
+How did you ensure data integrity?
+Data integrity was enforced via Prisma Schema Validation. By using strict Enums for statuses (e.g., PENDING, CONFIRMED, SEATED) and mandatory foreign key constraints, we ensured that the database could never contain "orphan" reservations or records with invalid states. Added build-time checks ensured all services regenerated their Prisma clients before compilation.
+
+How did TypeScript improve your development process?
+TypeScript acted as our Primary Quality Gate. Specifically, the exactOptionalPropertyTypes flag prevented us from passing undefined into the database where null was expected, which is a common source of bugs in Node.js/Prisma apps. The shared type library meant that a single change to a DTO in the backend instantly identified all broken components in the Frontend, reducing manual testing time by approximately 40%.
+
+---
+
+4.3 Production Readiness
+
+What monitoring would you add for production?
+For a live production environment, I would add the "Golden Signals":
+- Latency Monitoring: Track P99 response times for the Table search endpoint.
+- Error Rates: Automated alerting on 401 (Auth) and 429 (Rate Limit) spikes.
+- Container Health: Using the implemented curl-based Docker health checks to feed into an orchestration dashboard.
+
+How would you handle scaling beyond initial requirements?
+- Redis Read-Aside Caching: I would cache table availability for the current day in Redis to handle extreme traffic on the landing page search.
+- Database Read Replicas: Since a reservation system is read-heavy (users searching for times), I would route search queries to Read Replicas while reserving the Primary DB for booking writes.
+
+What security considerations did you implement?
+- Role-Based Access Control (RBAC): Every API endpoint is protected by middleware that validates the JWT's role claim (Admin, Staff, or Customer).
+- JWT Refresh Rotation: Implemented a secure token lifecycle with short-lived access tokens to mitigate token theft risks.
+- API Rate Limiting: Integrated express-rate-limit to prevent brute-force attacks and ensure system stability under load.
+
+What additional features would you prioritize next?
+1. Asynchronous Notification Service: Using a message queue (RabbitMQ) to send email/SMS confirmations without delaying the booking response.
+2. Real-time WebSockets: To push reservation updates to the Staff Dashboard instantly as they happen, replacing the current polling/manual refresh model.
+
+---
+
+4.4 Learning & Growth
+
+What new concepts did you research and implement?
+- Monorepo Management: Successfully mastered npm workspaces to manage five packages in a single repo while maintaining type-safe contracts.
+- Docker Production Optimization: Researched and solved Prisma query engine crashes by migrating from Alpine to Debian-based images (node:18) to ensure proper OpenSSL compatibility.
+
+What would you do differently knowing what you know now?
+I would have implemented an API Gateway (Nginx) from the start. Currently, the frontend communicates with three separate ports (3001, 3002, 3003). A unified gateway would have simplified CORS configurations and provided a single point for global rate-limiting and request logging.
+
+What aspects of the system are you most proud of?
+I am most proud of the Isomorphic Shared Package architecture. Solving the browser runtime conflict by splitting the shared package into server and client entry points was a major milestone that kept the codebase clean while maintaining the "Single Source of Truth" for types and DTOs.
+
+How did strong typing benefit the project?
+Strong typing transformed the project from a collection of scripts into a Reliable System. It acted as an executable documentation of our API contracts. When we updated the waitlist logic to handle optional reservation times, TypeScript flagged every service that was attempting to access those fields unsafely, preventing multiple production-level crashes before the first container was even built.

@@ -1,293 +1,253 @@
-# Restaurant Reservation System
+#  Restaurant Reservation System
 
-A production-ready microservices-based restaurant reservation system built with Node.js, TypeScript, React, and MySQL.
+A high-performance, production-ready microservices system for managing restaurant bookings and waitlists.
 
-## Architecture
+---
 
-The system consists of three microservices and a frontend application:
+##  System Overview & Architecture
 
-1. **User Service** (Port: 3001) - Authentication & user management
-2. **Reservation Service** (Port: 3002) - Booking & waitlist management
-3. **Table Service** (Port: 3003) - Restaurant & table management
-4. **Frontend** (Port: 3000) - React application
+The system follows a **Microservices Architecture** designed for scalability and fault tolerance. Each service communicates via REST APIs and shares typed data structures through a common package.
 
-## Tech Stack
+### Architecture Diagram
 
-- **Backend:** Node.js with Express, TypeScript
-- **Frontend:** React with TypeScript, Vite, Tailwind CSS
-- **Database:** MySQL with Prisma ORM
-- **State Management:** Redux Toolkit
-- **Testing:** Jest with ts-jest
-- **Package Manager:** npm (monorepo with workspaces)
+```mermaid
+@startuml
+!theme spacelab
+skinparam componentStyle rectangle
 
-## Prerequisites
+package "Client Layer (Frontend)" {
+    [React Application (Vite)] as Frontend
+    
+    package "Redux State Store" {
+        [Auth Slice] as AuthS
+        [Reservation Slice] as ResS
+        [Restaurant/Table Slice] as RestS
+        [Waitlist Slice] as WaitS
+    }
+}
 
-- Node.js 18+
-- MySQL 8.0
-- npm 9+
+package "Shared Contract Package" #LightPink {
+    [Shared DTOs & Interfaces] as Shared
+}
 
-## Quick Start with Docker (Recommended)
+package "Microservices Backend" {
+    
+    package "User Service (:3001)" #LightGreen {
+        [User Controller] as UC
+        [User Service Logic] as US
+        [User Repository] as UR
+        database "Prisma (User Docs)" as UP
+    }
 
-The easiest way to get started is using Docker Compose:
+    package "Reservation Service (:3002)" #LightBlue {
+        [Reservation Controller] as RC
+        [Waitlist Logic] as WL
+        [Reservation Service Logic] as RSL
+        [Reservation Repository] as RR
+        database "Prisma (Reservation Specs)" as RP
+    }
 
-### 1. Prerequisites
+    package "Table Service (:3003)" #LightYellow {
+        [Table Controller] as TC
+        [Availability Logic] as AL
+        [Table Repository] as TR
+        database "Prisma (Table Specs)" as TP
+    }
+}
 
-- Docker 20.10+ ([Install Docker](https://docs.docker.com/get-docker/))
-- Docker Compose 2.0+ (included with Docker Desktop)
+package "Persistence Layer (MySQL)" {
+    database "MySQL Cluster" {
+        [User DB] as DB1
+        [Reservation DB] as DB2
+        [Table DB] as DB3
+    }
+}
 
-### 2. Clone and Setup
+' External Interface
+User -> Frontend : Interacts
 
+' Internal Frontend flow
+Frontend -> AuthS
+Frontend -> ResS
+Frontend -> RestS
+Frontend -> WaitS
+
+' API Communication
+AuthS --> UC : REST/JWT
+ResS --> RC : REST
+WaitS --> RC : REST
+RestS --> TC : REST
+
+' Shared Package Usage
+Shared ..> Frontend : Type Support
+Shared ..> UC : Type Support
+Shared ..> RC : Type Support
+Shared ..> TC : Type Support
+
+' Inter-Service logic
+RC --> TC : Sync HTTP (Availability Check)
+RC --> UC : Sync HTTP (User Validation)
+
+' Service Internals
+UC -> US
+US -> UR
+UR -> UP
+UP --> DB1
+
+RC -> RSL
+RC -> WL
+RSL -> RR
+WL -> RR
+RR -> RP
+RP --> DB2
+
+TC -> AL
+AL -> TR
+TR -> TP
+TP --> DB3
+
+' Legend/Notes
+note right of Shared
+  Ensures consistent 
+  data models across 
+  all three services
+end note
+
+@enduml
+```
+
+---
+
+##  Technology Stack
+
+| Category | Technology | Version Requirement |
+|----------|------------|---------------------|
+| **Runtime** | Node.js | v18.x or v20.x |
+| **Language** | TypeScript | v5.x |
+| **Framework**| Express.js | v4.x |
+| **Frontend** | React | v18.x (Vite) |
+| **ORM** | Prisma | v5.x |
+| **Database** | MySQL | v8.0 |
+| **Container**| Docker | 20.10+ |
+| **Orchestration**| Docker Compose | 2.0+ |
+
+---
+
+##  Complete Setup Instructions
+
+The recommended setup method is using **Docker Compose**.
+
+### 1. Preparation
+Clone the repository and create the required root environment file:
 ```bash
-git clone https://github.com/Mihinr/Restaurant-Reservation-System.git
+git clone <repository-url>
 cd Restaurant-Reservation-System
 ```
 
-### 3. Configure Environment
+### 2. Configure Environment
+Create a `.env` file in the project root:
+```env
+MYSQL_ROOT_PASSWORD=your-secure-password
 
-```bash
-# Copy example environment file
-cp .env.example .env
-
-# Edit .env and update:
-# - MYSQL_ROOT_PASSWORD (use a strong password)
-# - JWT_SECRET (minimum 32 characters)
-# - REFRESH_TOKEN_SECRET (minimum 32 characters)
 ```
 
-### 4. Run Setup Script
-
-**Linux/Mac:**
+### 3. Build & Launch
 ```bash
-./docker-setup.sh
+# Build images and start services in background
+docker compose up -d --build
+
+# Wait for healthy status (check with docker compose ps)
 ```
 
-**Windows (PowerShell):**
-```powershell
-.\docker-setup.ps1
-```
-
-**Or manually:**
+### 4. Database Setup (Crucial)
+You must apply the schemas and seed the test data for the application to function:
 ```bash
-# Build and start services
-docker-compose build
-docker-compose up -d
-
-# Run migrations
-docker-compose exec user-service npm run db:migrate
-docker-compose exec reservation-service npm run db:migrate
-docker-compose exec table-service npm run db:migrate
-
-# Seed databases
-docker-compose exec user-service npm run db:seed
-docker-compose exec reservation-service npm run db:seed
-docker-compose exec table-service npm run db:seed
+# Apply migrations and seed each service
+docker compose exec user-service npm run db:migrate 
+docker compose exec user-service npm run db:seed
+docker compose exec reservation-service npm run db:migrate 
+docker compose exec reservation-service npm run db:seed
+docker compose exec table-service npm run db:migrate 
+docker compose exec table-service npm run db:migrate 
+docker compose exec table-service npm run db:seed
 ```
 
 ### 5. Access the Application
 
-- **Frontend:** http://localhost:3000
+- **Frontend:** http://localhost:5173
 - **User Service:** http://localhost:3001
 - **Reservation Service:** http://localhost:3002
 - **Table Service:** http://localhost:3003
 
-### Docker Commands
+## 🔑 Default Credentials
 
-```bash
-# View logs
-docker-compose logs -f
+After seeding the database, you can use these accounts to test the application:
 
-# Stop services
-docker-compose down
-
-# Restart services
-docker-compose restart
-
-# Development mode (with hot reload)
-docker-compose -f docker-compose.dev.yml up
-```
-
-For detailed Docker documentation, see [DOCKER_SETUP_GUIDE.md](./DOCKER_SETUP_GUIDE.md).
+| Role | Email | Password | Access Level |
+|------|-------|----------|--------------|
+| **Admin** | `admin@restaurant.com` | `admin123` | Full control over restaurants/tables |
+| **Staff** | `staff@restaurant.com` | `staff123` | Manage daily reservations & waitlists |
+| **Customer**| `customer1@example.com`| `customer123`| Book tables & join waitlists |
 
 ---
 
-## Local Development Setup (Without Docker)
+##  How to Run Tests
 
-### 1. Clone the Repository
+The system includes unit and integration tests using **Jest**.
 
+### Running Locally
+1. Install dependencies: `npm install`
+2. Run all tests: `npm test`
+3. Targeted coverage: `npm run test:coverage`
+
+### Running inside Docker
 ```bash
-git clone https://github.com/Mihinr/Restaurant-Reservation-System.git
-cd Restaurant-Reservation-System
+docker compose exec reservation-service npm test
 ```
 
-### 2. Install Dependencies
+---
 
-```bash
-npm install
-```
+##  API Documentation
 
-### 3. Database Setup
+Each microservice serves its own **Swagger UI** documentation locally:
 
-Create the databases:
+| Service | Documentation URL | Spec File |
+|---------|-------------------|-----------|
+| **User Service** | [http://localhost:3001/api-docs](http://localhost:3001/api-docs) | `/api-docs.json` |
+| **Reservation Service** | [http://localhost:3002/api-docs](http://localhost:3002/api-docs) | `/api-docs.json` |
+| **Table Service** | [http://localhost:3003/api-docs](http://localhost:3003/api-docs) | `/api-docs.json` |
 
-```sql
-CREATE DATABASE restaurant_user_service;
-CREATE DATABASE restaurant_reservation_service;
-CREATE DATABASE restaurant_table_service;
-```
+---
 
-### 4. Environment Variables
+## Environment Variables Reference
 
-Create `.env` files for each service:
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MYSQL_ROOT_PASSWORD` | The root password for the MySQL database | **REQUIRED** |
+| `DATABASE_URL` | Prisma link (calculated automatically in Docker) | - |
+| `JWT_SECRET` | Secret key for signing authentication tokens | `your-secret` |
+| `VITE_API_URL` | Frontend link to the Backend Gateway | `http://localhost:3001` |
+| `LOG_LEVEL` | Verbosity of server logs (debug, info, error) | `info` |
 
-**packages/user-service/.env:**
-```env
-NODE_ENV=development
-PORT=3001
-DATABASE_URL="mysql://root:password@localhost:3306/restaurant_user_service"
-JWT_SECRET="your-super-secret-jwt-key-change-in-production"
-JWT_EXPIRES_IN="15m"
-REFRESH_TOKEN_SECRET="your-refresh-token-secret"
-REFRESH_TOKEN_EXPIRES_IN="7d"
-LOG_LEVEL="info"
-```
+---
 
-**packages/reservation-service/.env:**
-```env
-NODE_ENV=development
-PORT=3002
-DATABASE_URL="mysql://root:password@localhost:3306/restaurant_reservation_service"
-JWT_SECRET="your-super-secret-jwt-key-change-in-production"
-TABLE_SERVICE_URL="http://localhost:3003"
-LOG_LEVEL="info"
-```
+## Troubleshooting Common Issues
 
-**packages/table-service/.env:**
-```env
-NODE_ENV=development
-PORT=3003
-DATABASE_URL="mysql://root:password@localhost:3306/restaurant_table_service"
-RESERVATION_SERVICE_URL="http://localhost:3002"
-LOG_LEVEL="info"
-```
+### "Column 'X' does not exist" or "Table not found"
+**Cause:** Your database schema is not synced with the Prisma code.
+**Fix:** Run `docker compose exec <service-name> npx prisma db push` to force sync the tables.
 
-### 5. Run Migrations
+### "No migration found in prisma/migrations"
+**Cause:** Attempting to run `migrate deploy` without SQL history files.
+**Fix:** Ensure you are running the `Init` migrations first as described in the Setup section.
 
-```bash
-cd packages/user-service && npm run db:migrate
-cd ../reservation-service && npm run db:migrate
-cd ../table-service && npm run db:migrate
-```
+### Backend connection refused from Frontend
+**Cause:** `VITE_API_URL` in `.env` is incorrect or the services (Port 3001-3003) are down.
+**Fix:** Check `docker compose ps` to ensure containers are healthy and verify the `.env` value.
 
-### 6. Seed Database
+### Port conflicts
+**Cause:** Ports 3000, 3001, 3002, 3003, or 3306 are already in use by local services.
+**Fix:** Stop existing MySQL or Node instances running on the host machine.
 
-```bash
-cd packages/user-service && npm run db:seed
-cd ../reservation-service && npm run db:seed
-cd ../table-service && npm run db:seed
-```
-
-### 7. Start Services
-
-From the root directory:
-
-```bash
-npm run dev
-```
-
-Or start each service individually:
-
-```bash
-cd packages/user-service && npm run dev
-cd packages/reservation-service && npm run dev
-cd packages/table-service && npm run dev
-cd packages/frontend && npm run dev
-```
-
-## API Documentation
-
-Each service provides interactive API documentation via Swagger UI. Once the services are running, you can access them at:
-
-- **User Service Docs:** [http://localhost:3001/api-docs](http://localhost:3001/api-docs)
-- **Reservation Service Docs:** [http://localhost:3002/api-docs](http://localhost:3002/api-docs)
-- **Table Service Docs:** [http://localhost:3003/api-docs](http://localhost:3003/api-docs)
-
-You can also download the JSON specification at `/api-docs.json` on each port.
-
-## API Endpoints
-
-### User Service (Port 3001)
-
-- `POST /api/v1/auth/register` - User registration
-- `POST /api/v1/auth/login` - User login
-- `POST /api/v1/auth/refresh` - Refresh token
-- `POST /api/v1/auth/logout` - Logout
-- `GET /api/v1/users/me` - Get current user
-- `PUT /api/v1/users/me` - Update profile
-- `DELETE /api/v1/users/me` - Delete account
-
-### Reservation Service (Port 3002)
-
-- `POST /api/v1/reservations` - Create reservation
-- `GET /api/v1/reservations` - List user's reservations
-- `GET /api/v1/reservations/:id` - Get reservation details
-- `PUT /api/v1/reservations/:id` - Update reservation
-- `DELETE /api/v1/reservations/:id` - Cancel reservation
-- `POST /api/v1/waitlist` - Join waitlist
-- `GET /api/v1/waitlist/restaurants/:restaurantId` - Get waitlist
-
-### Table Service (Port 3003)
-
-- `GET /api/v1/restaurants` - List restaurants
-- `GET /api/v1/restaurants/:id` - Get restaurant details
-- `POST /api/v1/restaurants` - Create restaurant
-- `PUT /api/v1/restaurants/:id` - Update restaurant
-- `GET /api/v1/restaurants/:id/tables` - List tables
-- `GET /api/v1/restaurants/:id/availability` - Search availability
-
-## Testing
-
-Run tests for all services:
-
-```bash
-npm test
-```
-
-Run tests with coverage:
-
-```bash
-npm run test:coverage
-```
-
-## Project Structure
-
-```
-restaurant-reservation-system/
-├── packages/
-│   ├── user-service/          # User authentication service
-│   ├── reservation-service/   # Reservation management service
-│   ├── table-service/         # Restaurant & table service
-│   ├── frontend/              # React frontend (to be implemented)
-│   └── shared/                # Shared types and utilities
-├── docker-compose.yml         # Docker Compose for production
-├── docker-compose.dev.yml     # Docker Compose for development
-├── docker-setup.sh            # Setup script (Linux/Mac)
-├── docker-setup.ps1           # Setup script (Windows)
-├── DOCKER_SETUP_GUIDE.md      # Comprehensive Docker guide
-└── DOCKER_QUICK_START.md      # Quick start guide
-└── README.md
-```
-
-## Development Status
-
-- ✅ Project structure and monorepo setup
-- ✅ User Service implementation
-- ✅ Reservation Service implementation
-- ✅ Table Service implementation
-- ✅ Frontend implementation
-- ✅ Docker configuration
-- ✅ Testing & API Documentation
-
-## License
-
-MIT
+---
 

@@ -9,6 +9,14 @@
 - **Browser**: Chrome/Edge (latest)
 - **Test Data**: Pre-seeded with 3 restaurants, 20+ tables, 10+ users
 
+### Setup Verification (DevOps)
+
+| Test ID     | Test Case                                    | Steps                                                                                                          | Expected Result                                   | Priority |
+| ----------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | -------- |
+| TC-DEV-001  | Docker Build & Initial Launch                | 1. Run `docker compose up -d` in fresh environment<br>2. Check `docker compose ps`                             | All service containers healthy / running          | High     |
+| TC-DEV-002  | Automated Database Migration                 | 1. Run `npm run db:migrate` in containers<br>2. Check tables in MySQL                                          | Tables created matching Prisma schema             | High     |
+| TC-DEV-003  | Initial Seeding                              | 1. Run `npm run db:seed` in containers<br>2. Login with `staff@example.com` (pw: `password123`)                | Admin/Staff/Customer users pre-populated          | High     |
+
 ---
 
 ## 1. Authentication & User Management
@@ -158,6 +166,8 @@
 | TC-WL-009 | View empty waitlist            | 1. Select restaurant with no waitlist<br>2. View    | "No one on the waitlist" message                   | Medium   |
 | TC-WL-010 | View waitlist - verify order   | 1. Multiple users join waitlist<br>2. View waitlist | Entries shown in order (by position)               | High     |
 | TC-WL-011 | View waitlist - status display | 1. View waitlist                                    | Status shown: WAITING, NOTIFIED, SEATED, CANCELLED | Medium   |
+| TC-WL-012 | Waitlist - positional tracking  | 1. Multiple users join waitlist<br>2. Remove user at pos 1<br>3. Verify new pos 1 | Remaining users' positions shift correctly         | High     |
+| TC-WL-013 | Waitlist - optional data fields | 1. Join waitlist with/without reservationDate/Time<br>2. Verify successful join | System handles exactOptionalPropertyTypes correctly | Medium   |
 
 ---
 
@@ -202,6 +212,9 @@
 | TC-STAFF-018 | Staff can access waitlist API          | 1. Login as staff<br>2. GET /api/v1/waitlist/restaurants/:id           | Waitlist data returned         | High     |
 | TC-STAFF-019 | Admin can access all staff features    | 1. Login as admin<br>2. Access all staff endpoints                     | All operations successful      | High     |
 | TC-STAFF-020 | Staff dashboard link in navigation     | 1. Login as staff/admin<br>2. Check header navigation                  | "Staff Dashboard" link visible | Medium   |
+| TC-STAFF-021 | Dashboard - Tabbed Navigation          | 1. Click "Today", "Future", "Past" tabs<br>2. Verify filtering      | Reservations filtered correctly by date comparison | High     |
+| TC-STAFF-022 | Dashboard - Clear Table Functionality  | 1. Click "Clear Table" on active reservation<br>2. Verify status change | Status: COMPLETED, Table becomes AVAILABLE      | High     |
+| TC-STAFF-023 | Dashboard - Detailed Reservation Cards | 1. View card in dashboard<br>2. Check for Phone/Special Requests    | All relevant customer info visible at a glance    | Medium   |
 
 ---
 
@@ -229,6 +242,8 @@
 | TC-UI-011 | 401 error handling       | 1. Token expires<br>2. Make API call                   | Redirected to login, error message shown   | High     |
 | TC-UI-012 | 404 error handling       | 1. Navigate to non-existent route                      | 404 page or redirect to home               | Low      |
 | TC-UI-013 | Validation error details | 1. Submit form with multiple errors<br>2. View errors  | All validation errors displayed            | High     |
+| TC-UI-014 | Actionable 429 Error Message | 1. Trigger rate limit<br>2. View error toast           | Message explains why and when to try again    | High     |
+| TC-UI-015 | Actionable 401 Error Message | 1. Use expired session<br>2. Attempt action            | Message directs user to log in again          | High     |
 
 ### 5.3 Navigation & Routing
 
@@ -345,17 +360,18 @@
 
 ### Test Execution Order
 
-1. **Authentication Tests** (TC-AUTH-001 to TC-AUTH-020)
-2. **Restaurant Search Tests** (TC-REST-001 to TC-REST-005)
-3. **Availability Search Tests** (TC-AVAIL-001 to TC-AVAIL-010)
-4. **Reservation Creation Tests** (TC-RES-001 to TC-RES-009)
-5. **Reservation View Tests** (TC-RES-010 to TC-RES-014)
-6. **Reservation Update Tests** (TC-RES-015 to TC-RES-022)
-7. **Reservation Cancel Tests** (TC-RES-023 to TC-RES-028)
-8. **Waitlist Tests** (TC-WL-001 to TC-WL-011)
-9. **Staff Dashboard Tests** (TC-STAFF-001 to TC-STAFF-020)
-10. **UI/UX Tests** (TC-UI-001 to TC-UI-017)
-11. **Validation Tests** (TC-VAL-001 to TC-VAL-008)
+1. **Setup & DevOps Verification** (TC-DEV-001 to TC-DEV-003)
+2. **Authentication Tests** (TC-AUTH-001 to TC-AUTH-020)
+3. **Restaurant Search Tests** (TC-REST-001 to TC-REST-005)
+4. **Availability Search Tests** (TC-AVAIL-001 to TC-AVAIL-010)
+5. **Reservation Creation Tests** (TC-RES-001 to TC-RES-009)
+6. **Reservation View Tests** (TC-RES-010 to TC-RES-014)
+7. **Reservation Update Tests** (TC-RES-015 to TC-RES-022)
+8. **Reservation Cancel Tests** (TC-RES-023 to TC-RES-028)
+9. **Waitlist Tests** (TC-WL-001 to TC-WL-013)
+10. **Staff Dashboard Tests** (TC-STAFF-001 to TC-STAFF-023)
+11. **UI/UX Tests** (TC-UI-001 to TC-UI-015)
+12. **Validation Tests** (TC-VAL-001 to TC-VAL-008)
 12. **Edge Cases** (TC-EDGE-001 to TC-EDGE-008)
 13. **Performance Tests** (TC-PERF-001 to TC-PERF-007)
 14. **Integration Tests** (TC-INT-001 to TC-INT-004)
